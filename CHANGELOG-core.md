@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on `FluxAggregator`, `WhitelistedAggregator`, `AggregatorProxy`,
   `WhitelistedAggregatorProxy`.
 - Updated the solidity compiler version for v0.6 from 0.6.2 to 0.6.6.
+- AccessControlledAggregatorProxy checks an external contract for users to be able to
+  read functions.
 
 ### Fixed
 
