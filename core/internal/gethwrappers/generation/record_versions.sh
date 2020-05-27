@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -x
 set -e
 
 # Record versions of each contract, to avoid use of stale wrappers

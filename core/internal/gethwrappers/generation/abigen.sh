@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -x
 set -e
 
 # Usage: abigen.sh <args>. See the following assignments for the argument list.

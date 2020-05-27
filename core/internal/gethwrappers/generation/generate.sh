@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -x
 set -e
 
 # Usage:
@@ -25,14 +26,14 @@ CLASS_NAME=$(basename "$SOL_PATH" .json)
 
 TMP_DIR=$(mktemp -d "/tmp/${CLASS_NAME}.XXXXXXXXX")
 
-ABI=$(jq -c -r .compilerOutput.abi < "$SOL_PATH")
+ABI=$(cat "$SOL_PATH" | jq -c -r .compilerOutput.abi)
 ABI_PATH="${TMP_DIR}/abi.json"
 echo "$ABI" > "$ABI_PATH"
 
 # We want the bytecode here, not the deployedByteCode. The latter does not
 # include the initialization code.
 # https://ethereum.stackexchange.com/questions/32234/difference-between-bytecode-and-runtime-bytecode
-BIN=$(jq -r .compilerOutput.evm.bytecode.object < "$SOL_PATH")
+BIN=$(cat "$SOL_PATH" | jq -r .compilerOutput.evm.bytecode.object)
 
 # Modern solc objects have metadata suffixes which vary depending on
 # incidental compilation context like absolute paths to source files. See
