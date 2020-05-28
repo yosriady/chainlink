@@ -68,6 +68,28 @@ export function fetchAnswerSuccess(
 }
 
 /**
+ * listing/FETCH_ANSWER_TIMESTAMP_SUCCESS
+ */
+export interface ListingAnswerTimestamp {
+  timestamp: number
+  config: FeedConfig
+}
+
+export interface FetchAnswerTimestampSuccessAction {
+  type: 'listing/FETCH_ANSWER_TIMESTAMP_SUCCESS'
+  payload: ListingAnswerTimestamp
+}
+
+export function fetchAnswerTimestampSuccess(
+  payload: ListingAnswerTimestamp,
+): FetchAnswerTimestampSuccessAction {
+  return {
+    type: 'listing/FETCH_ANSWER_TIMESTAMP_SUCCESS',
+    payload,
+  }
+}
+
+/**
  * listing/FETCH_HEALTH_PRICE_SUCCESS
  */
 export interface HealthPrice {

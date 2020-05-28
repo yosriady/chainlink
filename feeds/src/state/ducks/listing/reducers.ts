@@ -13,6 +13,7 @@ export interface State {
   feedOrder: Array<FeedConfig['contractAddress']>
   answers: Record<FeedConfig['contractAddress'], string>
   healthChecks: Record<FeedConfig['contractAddress'], HealthCheck>
+  answersTimestamp: Record<FeedConfig['contractAddress'], number>
 }
 
 export const INITIAL_STATE: State = {
@@ -20,6 +21,7 @@ export const INITIAL_STATE: State = {
   feedItems: {},
   feedOrder: [],
   answers: {},
+  answersTimestamp: {},
   healthChecks: {},
 }
 
@@ -63,6 +65,15 @@ const reducer: Reducer<State, Actions> = (state = INITIAL_STATE, action) => {
         answers: {
           ...state.answers,
           [action.payload.config.contractAddress]: action.payload.answer,
+        },
+      }
+
+    case 'listing/FETCH_ANSWER_TIMESTAMP_SUCCESS':
+      return {
+        ...state,
+        answersTimestamp: {
+          ...state.answersTimestamp,
+          [action.payload.config.contractAddress]: action.payload.timestamp,
         },
       }
 

@@ -31,23 +31,38 @@ export function fetchFeeds() {
 /**
  * answers
  */
-export function fetchAnswer(config: FeedConfig) {
+export function fetchLatestData(config: FeedConfig) {
   return async (dispatch: Dispatch) => {
     try {
       const provider = createInfuraProvider()
-      const payload = await latestAnswer(config, provider)
+      const answerPayload = await latestAnswer(config, provider)
+      const timestampPayload = await latestTimestamp(config, provider)
+
       const answer = formatAnswer(
-        payload,
+        answerPayload,
         config.multiply,
         config.decimalPlaces,
       )
       const listingAnswer: actions.ListingAnswer = { answer, config }
+      const listingAnswerTimestamp: actions.ListingAnswerTimestamp = {
+        timestamp: Number(timestampPayload),
+        config,
+      }
 
       dispatch(actions.fetchAnswerSuccess(listingAnswer))
+      dispatch(actions.fetchAnswerTimestampSuccess(listingAnswerTimestamp))
     } catch {
       console.error('Could not fetch answer')
     }
   }
+}
+
+async function latestTimestamp(
+  contractConfig: FeedConfig,
+  provider: JsonRpcProvider,
+) {
+  const contract = answerContract(contractConfig.contractAddress, provider)
+  return await contract.latestTimestamp()
 }
 
 const LATEST_ANSWER_CONTRACT_VERSIONS = [2, 3]
@@ -79,6 +94,15 @@ const ANSWER_ABI: FunctionFragment[] = [
     inputs: [],
     name: 'latestAnswer',
     outputs: [{ name: '', type: 'int256' }],
+    payable: false,
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: 'latestTimestamp',
+    outputs: [{ name: '', type: 'uint256' }],
     payable: false,
     stateMutability: 'view',
     type: 'function',

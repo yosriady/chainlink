@@ -4,6 +4,7 @@ import {
   FetchFeedsErrorAction,
   FetchAnswerSuccessAction,
   FetchHealthPriceSuccessAction,
+  FetchAnswerTimestampSuccessAction,
 } from './ducks/listing/actions'
 import {
   ClearStateAction,
@@ -42,6 +43,7 @@ export type Actions =
   | FetchFeedsSuccessAction
   | FetchFeedsErrorAction
   | FetchAnswerSuccessAction
+  | FetchAnswerTimestampSuccessAction
   | FetchHealthPriceSuccessAction
   | FetchFeedByPairBeginAction
   | FetchFeedByPairSuccessAction
