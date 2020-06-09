@@ -2,9 +2,9 @@ package store
 
 import (
 	"fmt"
-	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
@@ -35,20 +35,22 @@ func NewVRFKeyStore(store *Store) *VRFKeyStore {
 	}
 }
 
-// GenerateProof(k, seed) is marshaled randomness proof given public key k and
-// VRF input seed.
+// GenerateProof(k, preSeed, blockHash) is marshaled randomness proof given
+// public key k and VRF input seed computed from the preseed and the hash of the
+// block in which the VRF request appeared.
 //
 // k must have already been unlocked in ks, as constructing the VRF proof
 // requires the secret key.
-func (ks *VRFKeyStore) GenerateProof(k *vrfkey.PublicKey, seed *big.Int) (
-	vrf.MarshaledProof, error) {
+func (ks *VRFKeyStore) GenerateProof(k *vrfkey.PublicKey, preSeed *vrf.Seed,
+	blockHash common.Hash, blockNum uint64) (
+	*vrf.MarshaledOnChainResponse, error) {
 	ks.lock.RLock()
 	defer ks.lock.RUnlock()
 	privateKey, found := ks.keys[*k]
 	if !found {
-		return vrf.MarshaledProof{}, fmt.Errorf("key %s has not been unlocked", k)
+		return nil, fmt.Errorf("key %s has not been unlocked", k)
 	}
-	return privateKey.MarshaledProof(seed)
+	return privateKey.MarshaledProof(preSeed, blockHash, blockNum)
 }
 
 // Unlock tries to unlock each vrf key in the db, using the given pass phrase,

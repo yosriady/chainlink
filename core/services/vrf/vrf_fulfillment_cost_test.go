@@ -10,24 +10,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMeasureFulfillmenttGasCost(t *testing.T) {
+func TestMeasureFulfillmentGasCost(t *testing.T) {
 	coordinator := deployCoordinator(t)
 	keyHash, _, fee := registerProvingKey(t, coordinator)
 	// Set up a request to fulfill
 	log := requestRandomness(t, coordinator, keyHash, fee, seed)
-	proof, err := vrf.GenerateProofWithNonce(rawSecretKey, log.Seed,
-		big.NewInt(1) /* nonce */)
+	proofBlob, err := vrf.GenerateProofResponseWithNonce(rawSecretKey, log.Seed,
+		log.Raw.Raw.BlockHash, log.Raw.Raw.BlockNumber, big.NewInt(1) /* nonce */)
 	require.NoError(t, err, "could not generate VRF proof!")
-	// Set up the proof with which to fulfill request
-	proofBlob, err := proof.MarshalForSolidityVerifier()
-	require.NoError(t, err, "could not marshal VRF proof for VRFCoordinator!")
-
+	coordinator.backend.Commit() // Work around simbackend/EVM block number bug
 	estimate := estimateGas(t, coordinator.backend, coordinator.neil.From,
 		coordinator.rootContractAddress, coordinator.coordinatorABI,
 		"fulfillRandomnessRequest", proofBlob[:])
 
-	assert.Greater(t, estimate, uint64(145000),
+	assert.Greater(t, estimate, uint64(108000),
 		"fulfillRandomness tx cost less gas than expected")
-	assert.Less(t, estimate, uint64(300000),
+	assert.Less(t, estimate, uint64(400000),
 		"fulfillRandomness tx cost more gas than expected")
 }

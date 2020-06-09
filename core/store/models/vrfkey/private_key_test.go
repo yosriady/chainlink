@@ -7,10 +7,12 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_verifier_wrapper"
+	"github.com/smartcontractkit/chainlink/core/internal/gethwrappers/generated/solidity_vrf_verifier_wrapper"
+	"github.com/smartcontractkit/chainlink/core/services/vrf"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -35,7 +37,17 @@ func TestPrintingDoesNotLeakKey(t *testing.T) {
 }
 
 func TestMarshaledProof(t *testing.T) {
-	proof, err := k.MarshaledProof(big.NewInt(1))
+	blockHash := common.Hash{}
+	blockNum := uint64(0)
+	preSeed, err := vrf.BigToSeed(big.NewInt(1))
+	require.NoError(t, err)
+	proofResponse, err := k.MarshaledProof(preSeed, blockHash, blockNum)
+	require.NoError(t, err)
+	goProof, err := vrf.UnmarshalProofResponse(*proofResponse)
+	require.NoError(t, err)
+	actualProof, err := goProof.ActualProof(blockHash)
+	require.NoError(t, err)
+	proof, err := actualProof.MarshalForSolidityVerifier()
 	require.NoError(t, err)
 	// NB: For changes to the VRF solidity code to be reflected here, "go generate"
 	// must be run in core/services/vrf.
@@ -44,7 +56,7 @@ func TestMarshaledProof(t *testing.T) {
 	genesisData := core.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000)}}
 	gasLimit := eth.DefaultConfig.Miner.GasCeil
 	backend := backends.NewSimulatedBackend(genesisData, gasLimit)
-	_, _, verifier, err := solidity_verifier_wrapper.DeployVRFTestHelper(auth, backend)
+	_, _, verifier, err := solidity_vrf_verifier_wrapper.DeployVRFTestHelper(auth, backend)
 	if err != nil {
 		panic(errors.Wrapf(err, "while initializing EVM contract wrapper"))
 	}

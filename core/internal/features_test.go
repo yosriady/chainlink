@@ -1031,11 +1031,10 @@ func TestIntegration_RandomnessRequest(t *testing.T) {
 	defer cleanup()
 	eth := app.MockCallerSubscriberClient()
 	logs := make(chan ethpkg.Log, 1)
-	txHash := cltest.NewHash()
 	eth.Context("app.Start()", func(eth *cltest.EthMock) {
 		eth.RegisterSubscription("logs", logs)
 		eth.Register("eth_getTransactionCount", `0x100`) // activate account nonce
-		eth.Register("eth_sendRawTransaction", txHash)
+		eth.Register("eth_sendRawTransaction", cltest.NewHash())
 		eth.Register("eth_getTransactionReceipt", ethpkg.TxReceipt{
 			Hash:        cltest.NewHash(),
 			BlockNumber: cltest.Int(10),
@@ -1092,15 +1091,16 @@ func TestIntegration_RandomnessRequest(t *testing.T) {
 	require.NoError(t, err)
 	proof, ok := proofContainer["_proof"].([]byte)
 	require.True(t, ok)
-	require.Len(t, proof, vrf.ProofLength)
+	require.Len(t, proof, vrf.OnChainResponseLength)
 	publicPoint, err := provingKey.PublicKey.Point()
 	require.NoError(t, err)
 	require.Equal(t, proof[:64], secp256k1.LongMarshal(publicPoint))
-	goProof, err := vrf.UnmarshalSolidityProof(proof)
+	mProof := vrf.MarshaledOnChainResponse{}
+	require.Equal(t, copy(mProof[:], proof), vrf.OnChainResponseLength)
+	goProof, err := vrf.UnmarshalProofResponse(mProof)
 	require.NoError(t, err, "problem parsing solidity proof")
-	proofValid, err := goProof.VerifyVRFProof()
+	_, err = goProof.ActualProof(requestlog.BlockHash)
 	require.NoError(t, err, "problem verifying solidity proof")
-	require.True(t, proofValid, "vrf proof was invalid: %s", goProof.String())
 
 	// Check that a log from a different address is rejected. (The node will only
 	// ever see this situation if the ethereum.FilterQuery for this job breaks,

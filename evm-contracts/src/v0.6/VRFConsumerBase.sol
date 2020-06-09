@@ -96,7 +96,7 @@ abstract contract VRFConsumerBase is VRFRequestIDBase {
    * @param requestId The Id initially returned by requestRandomness
    * @param randomness the VRF output
    */
-  function fulfillRandomness(bytes32 requestId, uint256 randomness)
+  function fulfillRandomnessRequest(bytes32 requestId, uint256 randomness)
     external virtual;
 
   /**
