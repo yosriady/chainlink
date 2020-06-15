@@ -1734,10 +1734,8 @@ func TestORM_FindJobPreloadsJobSpecErrors(t *testing.T) {
 
 	description1, description2 := "description 1", "description 2"
 
-	jse1 := models.NewJobSpecError(job1.ID, description1)
-	jse2 := models.NewJobSpecError(job1.ID, description2)
-	require.NoError(t, store.CreateJobSpecError(&jse1))
-	require.NoError(t, store.CreateJobSpecError(&jse2))
+	require.NoError(t, store.UpsertErrorFor(job1.ID, description1))
+	require.NoError(t, store.UpsertErrorFor(job1.ID, description2))
 
 	job1, err := store.FindJob(job1.ID)
 	require.NoError(t, err)
@@ -1751,7 +1749,7 @@ func TestORM_FindJobPreloadsJobSpecErrors(t *testing.T) {
 	assert.Equal(t, job1.Errors[1].Description, description2)
 }
 
-func TestORM_CreateJobSpecError_Happy(t *testing.T) {
+func TestORM_UpsertErrorFor_Happy(t *testing.T) {
 	t.Parallel()
 
 	store, cleanup := cltest.NewStore(t)
@@ -1764,25 +1762,33 @@ func TestORM_CreateJobSpecError_Happy(t *testing.T) {
 
 	description1, description2 := "description 1", "description 2"
 
+	err := store.UpsertErrorFor(job1.ID, description1)
+	require.NoError(t, err)
+
 	tests := []struct {
-		jobID       *models.ID
-		description string
+		jobID              *models.ID
+		description        string
+		expectedOccurances uint
 	}{
 		{
 			job1.ID,
 			description1,
+			2, // duplicate
 		},
 		{
 			job1.ID,
 			description2,
+			1,
 		},
 		{
 			job2.ID,
 			description1,
+			1,
 		},
 		{
 			job2.ID,
 			description2,
+			1,
 		},
 	}
 
@@ -1790,14 +1796,17 @@ func TestORM_CreateJobSpecError_Happy(t *testing.T) {
 		test := tt
 		testName := fmt.Sprintf(`Create JobSpecError with ID %v and description "%s"`, test.jobID, test.description)
 		t.Run(testName, func(t *testing.T) {
-			jse := models.NewJobSpecError(test.jobID, test.description)
-			err := store.CreateJobSpecError(&jse)
+			err := store.UpsertErrorFor(test.jobID, test.description)
 			require.NoError(t, err)
+			jse, found, err := store.FindJobSpecError(test.jobID, test.description)
+			require.NoError(t, err)
+			require.True(t, found)
+			require.Equal(t, test.expectedOccurances, jse.Occurances)
 		})
 	}
 }
 
-func TestORM_CreateJobSpecError_Error(t *testing.T) {
+func TestORM_UpsertErrorFor_Error(t *testing.T) {
 	t.Parallel()
 
 	store, cleanup := cltest.NewStore(t)
@@ -1806,8 +1815,7 @@ func TestORM_CreateJobSpecError_Error(t *testing.T) {
 	job := cltest.NewJob()
 	require.NoError(t, store.CreateJob(&job))
 	description := "description"
-	jse := models.NewJobSpecError(job.ID, description)
-	err := store.CreateJobSpecError(&jse)
+	err := store.UpsertErrorFor(job.ID, description)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1816,22 +1824,21 @@ func TestORM_CreateJobSpecError_Error(t *testing.T) {
 		description string
 	}{
 		{
-			"duplicate",
-			job.ID,
-			description,
-		},
-		{
 			"missing job",
 			models.NewID(),
 			description,
+		},
+		{
+			"missing description",
+			job.ID,
+			"",
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			jse := models.NewJobSpecError(test.jobID, test.description)
-			err := store.CreateJobSpecError(&jse)
+			err := store.UpsertErrorFor(test.jobID, test.description)
 			assert.Error(t, err)
 		})
 	}
