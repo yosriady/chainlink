@@ -3,6 +3,7 @@ package bulletprooftxmanager
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	"github.com/smartcontractkit/chainlink/core/eth"
@@ -108,12 +109,17 @@ func (ec *ethConfirmer) CheckForReceipts() error {
 	for _, etx := range unconfirmedEtxs {
 		for _, attempt := range etx.EthTxAttempts {
 			// NOTE: If this becomes a performance bottleneck due to eth node requests,
-			// it may be possible to use goroutines here to speed it up
+			// it may be possible to use goroutines here to speed it up by
+			// issuing `fetchReceipt` requests in parallel
 			receipt, err := ec.fetchReceipt(attempt.Hash)
-			if err != nil {
-				return err
+			if isParityQueriedReceiptTooEarly(err) {
+				logger.Debugf("EthConfirmer: got receipt for transaction %s but it's still in the mempool and not included in a block yet", attempt.Hash.Hex())
+				break
+			} else if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("fetchReceipt failed for transaction %s", attempt.Hash.Hex()))
 			}
 			if receipt != nil {
+				logger.Debugf("EthConfirmer: got receipt for transaction %s included in block %v", attempt.Hash.Hex(), receipt.BlockNumber)
 				if receipt.TxHash != attempt.Hash {
 					return errors.Errorf("invariant violation: expected receipt with hash %s to have same hash as attempt with hash %s", receipt.TxHash.Hex(), attempt.Hash.Hex())
 				}
@@ -121,6 +127,8 @@ func (ec *ethConfirmer) CheckForReceipts() error {
 					return err
 				}
 				break
+			} else {
+				logger.Debugf("EthConfirmer: still waiting for receipt for transaction %s", attempt.Hash.Hex())
 			}
 		}
 	}
@@ -150,7 +158,8 @@ func (ec *ethConfirmer) fetchReceipt(hash gethCommon.Hash) (*gethTypes.Receipt, 
 	if err != nil && err.Error() == "not found" {
 		return nil, nil
 	}
-	return receipt, errors.Wrap(err, "fetchReceipt failed")
+	return receipt, err
+
 }
 
 func (ec *ethConfirmer) saveReceipt(receipt gethTypes.Receipt, ethTxID int64) error {
@@ -163,7 +172,7 @@ func (ec *ethConfirmer) saveReceipt(receipt gethTypes.Receipt, ethTxID int64) er
 		// be one receipt for an eth_tx, and if it exists then the transaction
 		// is marked confirmed which means we can never get here.
 		// However, even so, it still shouldn't be an error to re-insert a receipt we already have.
-		if err := tx.Set("gorm:insert_option", "ON CONFLICT (tx_hash, block_hash) DO NOTHING").
+		if err := tx.Set("gorm:insert_option", "ON CONFLICT (tx_hash, block_hash) DO UPDATE SET tx_hash = EXCLUDED.tx_hash").
 			Create(&models.EthReceipt{
 				Receipt:          receiptJSON,
 				TxHash:           receipt.TxHash,

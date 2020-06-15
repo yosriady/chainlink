@@ -268,6 +268,28 @@ func TestEthConfirmer_CheckForReceipts(t *testing.T) {
 		require.Equal(t, models.EthTxConfirmed, etx.State)
 		require.Len(t, etx.EthTxAttempts, 3)
 	})
+
+	t.Run("ignores error that comes from querying parity too early", func(t *testing.T) {
+		etx3 := cltest.MustInsertUnconfirmedEthTxWithBroadcastAttempt(t, store, nonce)
+		attempt3_1 := etx3.EthTxAttempts[0]
+		nonce++
+
+		gethClient.On("TransactionReceipt", mock.Anything, mock.MatchedBy(func(txHash gethCommon.Hash) bool {
+			return txHash == attempt3_1.Hash
+		})).Return(nil, errors.New("missing required field 'transactionHash' for Log")).Once()
+
+		// Do the thing
+		require.NoError(t, ec.CheckForReceipts())
+
+		// No receipt, but no error either
+		etx, err := store.FindEthTxWithAttempts(etx3.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, models.EthTxUnconfirmed, etx.State)
+		assert.Len(t, etx.EthTxAttempts, 1)
+		attempt3_1 = etx.EthTxAttempts[0]
+		require.Len(t, attempt3_1.EthReceipts, 0)
+	})
 }
 
 func TestEthConfirmer_FindEthTxsRequiringNewAttempt(t *testing.T) {

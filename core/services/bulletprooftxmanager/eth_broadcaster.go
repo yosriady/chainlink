@@ -356,6 +356,7 @@ func saveUnconfirmed(store *store.Store, etx *models.EthTx, attempt models.EthTx
 	if attempt.State != models.EthTxAttemptInProgress {
 		return errors.New("attempt must be in in_progress state")
 	}
+	logger.Debugf("EthBroadcaster: successfully broadcast eth_tx %v with hash %s", etx.ID, attempt.Hash.Hex())
 	etx.State = models.EthTxUnconfirmed
 	attempt.State = models.EthTxAttemptBroadcast
 	return store.Transaction(func(tx *gorm.DB) error {
@@ -398,6 +399,10 @@ func saveFatallyErroredTransaction(store *store.Store, etx *models.EthTx) error 
 	if etx.State != models.EthTxInProgress {
 		return errors.Errorf("can only transition to fatal_error from in_progress, transaction is currently %s", etx.State)
 	}
+	if etx.Error == nil {
+		return errors.New("expected error field to be set")
+	}
+	logger.Errorf("EthBroadcaster: fatal error sending eth_tx %v: %s", etx.ID, *etx.Error)
 	etx.Nonce = nil
 	etx.State = models.EthTxFatalError
 	return store.Transaction(func(tx *gorm.DB) error {

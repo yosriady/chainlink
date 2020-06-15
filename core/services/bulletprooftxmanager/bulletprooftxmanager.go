@@ -80,7 +80,7 @@ func sendTransaction(gethClientWrapper strpkg.GethClientWrapper, a models.EthTxA
 	})
 
 	gasPriceGwei := fmt.Sprintf("%.2f", float64(a.GasPrice.ToInt().Int64())/1000000000)
-	logger.Debugf("BulletproofTxManager: Attempting transaction (eth_tx_attempt.id: %v): 0x%x at gas price %s Gwei", a.ID, signedTx.Hash(), gasPriceGwei)
+	logger.Debugf("BulletproofTxManager: Broadcasting transaction (eth_tx_attempt.id: %v): 0x%x at gas price %s Gwei", a.ID, signedTx.Hash(), gasPriceGwei)
 	sendErr := SendError(err)
 	if sendErr.IsTransactionAlreadyInMempool() {
 		logger.Debugf("transaction with hash %s already in mempool", signedTx.Hash())
