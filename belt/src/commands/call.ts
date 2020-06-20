@@ -9,10 +9,10 @@ import { RuntimeConfigParser } from '../services/runtimeConfig'
 const conf = new RuntimeConfigParser()
 
 export default class Call extends Command {
-  static description = 'Calls a chainlink smart contract function'
+  static description = 'Calls a chainlink smart contract read-only function.'
 
   static examples = [
-    'belt call [<options>] <contract> <address> <sig> [<args>]',
+    'belt call [<options>] <contract> <address> <fsig> [<args>]',
     "belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'",
   ]
   static strict = false

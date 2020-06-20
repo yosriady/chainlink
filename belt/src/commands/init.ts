@@ -13,7 +13,8 @@ const NETWORKS = [
 ]
 
 export default class Init extends Command {
-  static description = 'Initialize .beltrc file'
+  static description =
+    'Initializes a .beltrc file. Required for `deploy`, `exec` and `call`.'
 
   static examples = [
     'belt init',

@@ -26,11 +26,26 @@ USAGE
 ```
 <!-- usagestop -->
 
+<!-- usage -->
+```sh-session
+$ cd evm-contracts/
+$ belt init
+
+$ belt deploy ...
+$ belt exec ...
+$ belt call ...
+```
+<!-- usagestop -->
+
 # Commands
 
 <!-- commands -->
 * [`belt box [PATH]`](#belt-box-path)
 * [`belt compile [COMPILER]`](#belt-compile-compiler)
+* [`belt init`](#belt-init)
+* [`belt deploy`](#belt-deploy)
+* [`belt exec`](#belt-exec)
+* [`belt call`](#belt-call)
 * [`belt help [COMMAND]`](#belt-help-command)
 
 ## `belt box [PATH]`
@@ -92,6 +107,109 @@ EXAMPLE
 ```
 
 _See code: [src/src/commands/compile.ts](https://github.com/smartcontractkit/chainlink/blob/v0.0.1/src/src/commands/compile.ts)_
+
+## `belt init`
+
+Initializes a `.beltrc` file. Required for `deploy`, `exec` and `call`.
+
+```
+USAGE
+  $ belt init [PATH]
+
+ARGUMENTS
+  PATH  [default: .] .beltrc filepath
+
+OPTIONS
+  -c, --chainId=chainId                  Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
+  -d, --artifactsDir=artifactsDir        Ethers.js artifacts directory
+  -g, --gasPrice=gasPrice                Default gas price
+  -h, --help                             show CLI help
+  -l, --gasLimit=gasLimit                Default gas limit
+  -m, --mnemonic=mnemonic                Mnemonic for Ethereum wallet to send transactions from
+  -p, --infuraProjectId=infuraProjectId  Infura project ID
+
+EXAMPLES
+  belt init
+  belt init --chainId 4 --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... my-project/
+```
+
+Example `.beltrc` file:
+
+```json
+{
+    "chainId": 4,
+    "mnemonic": "mail dawn focus web panther man penalty gospel transfer meat tent person",
+    "infuraProjectId": "fdf38d85d15e434e9b2ca152b7b1bc6f",
+    "gasPrice": 40000000000,
+    "gasLimit": 8000000,
+    "artifactsDir": "abi/v0.6"
+}
+```
+
+> **Note:** `.beltrc` files should always be included in `.gitignore` because they contain sensitive information!
+
+## `belt deploy`
+
+Deploys a chainlink smart contract.
+
+```
+USAGE
+  $ belt deploy [CONTRACTNAME]
+
+ARGUMENTS
+  CONTRACTNAME  Name of the chainlink contract to deploy
+
+OPTIONS
+  -h, --help  show CLI help
+
+EXAMPLES
+  belt deploy [<options>] <contract> [<args>]
+  belt deploy AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'
+
+  Deploying AccessControlledAggregator to 0x341869dbD1448a40aB762159264723383b3a6E48 ... Deployed in tx 0x6a47a7bb1f84f9048da11222b0a879d372a9f4ba50511a594b84a833e45eb80f
+```
+
+## `belt exec`
+
+Executes a chainlink smart contract write function.
+
+```
+USAGE
+  $ belt exec [CONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
+
+ARGUMENTS
+  CONTRACTNAME       Name of the chainlink contract
+  CONTRACTADDRESS    Address of the chainlink contract
+  FUNCTIONSIGNATURE  ABI-encoded function signature to call
+
+OPTIONS
+  -h, --help  show CLI help
+
+EXAMPLES
+  belt exec [<options>] <contract> <address> <fsig> [<args>]
+  belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0x67b260DffCE59E890CfAe9ec733921357732f90a
+```
+
+## `belt call`
+
+Calls a chainlink smart contract read-only function.
+
+```
+USAGE
+  $ belt call [CONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
+
+ARGUMENTS
+  CONTRACTNAME       Name of the chainlink contract
+  CONTRACTADDRESS    Address of the chainlink contract
+  FUNCTIONSIGNATURE  ABI-encoded function signature to call
+
+OPTIONS
+  -h, --help  show CLI help
+
+EXAMPLES
+  belt call [<options>] <contract> <address> <fsig> [<args>]
+  belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'
+```
 
 ## `belt help [COMMAND]`
 

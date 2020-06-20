@@ -10,10 +10,10 @@ import { getNetworkName, findABI } from '../services/utils'
 const conf = new RuntimeConfigParser()
 
 export default class Deploy extends Command {
-  static description = 'Deploys a chainlink smart contract'
+  static description = 'Deploys a chainlink smart contract.'
 
   static examples = [
-    'belt deploy [<options>] <contractName> [<args>]',
+    'belt deploy [<options>] <contract> [<args>]',
     "belt deploy AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'",
   ]
   static strict = false
