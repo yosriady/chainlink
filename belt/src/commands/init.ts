@@ -45,8 +45,8 @@ export default class Init extends Command {
       description: 'Default gas limit',
     }),
     artifactsDir: flags.string({
-      char: 'd',
-      description: 'Ethers.js artifacts directory',
+      char: 'a',
+      description: 'ABI directory',
     }),
   }
 
