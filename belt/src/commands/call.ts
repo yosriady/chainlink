@@ -1,12 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import fs from 'fs'
-import { join } from 'path'
 import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import chalk from 'chalk'
-// import cli from 'cli-ux'
 import { ethers } from 'ethers'
-import { getNetworkName } from '../services/utils'
+import { getNetworkName, findABI } from '../services/utils'
 import { RuntimeConfigParser } from '../services/runtimeConfig'
 
 const conf = new RuntimeConfigParser()
@@ -58,64 +55,62 @@ export default class Call extends Command {
     argv: string[],
   ) {
     // Check .beltrc exists
-    if (!conf.exists()) {
-      this.log(
-        chalk.red(".beltrc not found - Run 'belt init -i' to get started."),
+    let config
+    try {
+      config = conf.load()
+    } catch (e) {
+      this.error(chalk.red(e))
+    }
+
+    // Find contract ABI
+    const { found, abi } = findABI(config, contractName)
+    if (!found) {
+      this.error(
+        chalk.red(`${contractName} ABI not found at - Run 'belt compile'`),
       )
-      this.exit(1)
     }
 
     // Validate function signature
     if (!isValidSignature(functionSignature)) {
-      this.log(
+      this.error(
         chalk.red("Invalid function signature - belt call ... 'decimals()'"),
       )
-      this.exit(1)
     }
 
-    // Initialize ethers wallet (signer + provider)
-    const options = conf.load()
+    // Validate function inputs
+    const functionName = getFunctionName(functionSignature)
+    const functionABI = getFunctionABI(abi, functionName)
+    const numFunctionInputs = functionABI['inputs'].length
+    const commandInputs = argv.slice(Object.keys(Call.args).length)
+    if (numFunctionInputs !== commandInputs.length) {
+      this.error(
+        chalk.red(
+          `Received ${commandInputs.length} arguments, ${functionSignature} expected ${numFunctionInputs}`,
+        ),
+      )
+    }
+
+    // Initialize ethers provider
     const provider = new ethers.providers.InfuraProvider(
-      getNetworkName(options.chainId),
+      getNetworkName(config.chainId),
     )
 
-    // Find contract ABI
-    const cwd = process.cwd()
-    const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
-    if (!fs.existsSync(artifactPath)) {
-      this.log(
-        chalk.red(`ABI not found at ${artifactPath} - Run 'belt compile'`),
-      )
-      this.exit(1)
-    }
-
-    // Load contract ABI
-    const buffer = fs.readFileSync(artifactPath)
-    const abi = JSON.parse(buffer.toString())
-
+    // Initialize contract
     const contract = new ethers.Contract(
       contractAddress,
       abi['compilerOutput']['abi'],
       provider,
     )
 
-    // Validate function inputs
-    const functionName = getFunctionName(functionSignature)
-    const functionABI = getFunctionABI(abi, functionName)
-    const numFunctionInputs = functionABI['inputs'].length
-    const inputs = argv.slice(Object.keys(Call.args).length)
-    if (numFunctionInputs !== inputs.length) {
-      this.log(
-        chalk.red(
-          `Received ${inputs.length} arguments, ${functionSignature} expected ${numFunctionInputs}`,
-        ),
-      )
-      this.exit(1)
-    }
-
+    // Call contract
     // TODO: add overrides e.g. gasprice, gaslimit
-    const result = await contract[functionSignature](...inputs)
-    this.log(result)
+    try {
+      // TODO: add overrides e.g. gasprice, gaslimit
+      const result = await contract[functionSignature](...commandInputs, {})
+      this.log(result)
+    } catch (e) {
+      this.error(e)
+    }
   }
 }
 

@@ -1,7 +1,10 @@
+import fs from 'fs'
+import { join } from 'path'
 import d from 'debug'
 import { readFileSync } from 'fs'
 import { ls } from 'shelljs'
 import * as config from './config'
+import { RuntimeConfig } from './runtimeConfig'
 
 /**
  * Get contract versions and their directories
@@ -63,4 +66,19 @@ export function getNetworkName(chainId: number): string {
   }
 
   return networks[chainId]
+}
+
+export function findABI(
+  config: RuntimeConfig,
+  contractName: string,
+): { found: boolean; abi: any } {
+  const cwd = process.cwd()
+  const artifactPath = join(cwd, config.artifactsDir, `${contractName}.json`)
+
+  const found = fs.existsSync(artifactPath)
+  if (!found) return { found: false, abi: null }
+
+  const buffer = fs.readFileSync(artifactPath)
+  const abi = JSON.parse(buffer.toString())
+  return { found: true, abi }
 }

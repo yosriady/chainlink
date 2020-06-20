@@ -1,13 +1,11 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import fs from 'fs'
-import { join } from 'path'
 import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import cli from 'cli-ux'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
-import { RuntimeConfigParser } from '../services/runtimeConfig'
-import { getNetworkName } from '../services/utils'
+import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
+import { getNetworkName, findABI } from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
@@ -40,34 +38,35 @@ export default class Deploy extends Command {
 
   private async deployContract(contractName: string, argv: string[]) {
     // Check .beltrc exists
-    if (!conf.exists()) {
-      this.log(
-        chalk.red(".beltrc not found - Run 'belt init -i' to get started."),
+    let config
+    try {
+      config = conf.load()
+    } catch (e) {
+      this.error(chalk.red(e))
+    }
+
+    // Find contract ABI
+    const { found, abi } = findABI(config, contractName)
+    if (!found) {
+      this.error(
+        chalk.red(`${contractName} ABI not found at - Run 'belt compile'`),
       )
-      this.exit(1)
+    }
+
+    // Validate constructor inputs and user input length
+    const constructorABI = getConstructorABI(abi)
+    const numConstructorInputs = constructorABI['inputs'].length
+    const commandInputs = argv.slice(Object.keys(Deploy.args).length)
+    if (numConstructorInputs !== commandInputs.length) {
+      this.error(
+        chalk.red(
+          `Received ${commandInputs.length} arguments, constructor expected ${numConstructorInputs}`,
+        ),
+      )
     }
 
     // Initialize ethers wallet (signer + provider)
-    const options = conf.load()
-    const provider = new ethers.providers.InfuraProvider(
-      getNetworkName(options.chainId),
-    )
-    let wallet = ethers.Wallet.fromMnemonic(options.mnemonic)
-    wallet = wallet.connect(provider)
-
-    // Find contract ABI
-    const cwd = process.cwd()
-    const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
-    if (!fs.existsSync(artifactPath)) {
-      this.log(
-        chalk.red(`ABI not found at ${artifactPath} - Run 'belt compile'`),
-      )
-      this.exit(1)
-    }
-
-    // Load contract ABI
-    const buffer = fs.readFileSync(artifactPath)
-    const abi = JSON.parse(buffer.toString())
+    const wallet = initWallet(config)
 
     // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(
@@ -76,24 +75,11 @@ export default class Deploy extends Command {
       wallet,
     )
 
-    // Validate constructor inputs
-    const constructorABI = getConstructorABI(abi)
-    const numConstructorInputs = constructorABI['inputs'].length
-    const inputs = argv.slice(Object.keys(Deploy.args).length)
-    if (numConstructorInputs !== inputs.length) {
-      this.log(
-        chalk.red(
-          `Received ${inputs.length} arguments, constructor expected ${numConstructorInputs}`,
-        ),
-      )
-      this.exit(1)
-    }
-
     // Deploy contract
     let contract
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
-      contract = await factory.deploy(...inputs)
+      contract = await factory.deploy(...commandInputs, {})
       cli.action.start(`Deploying ${contractName} to ${contract.address} `)
       contract.deployTransaction.wait()
       cli.action.stop('Deployed')
@@ -103,6 +89,15 @@ export default class Deploy extends Command {
     }
     return
   }
+}
+
+function initWallet(config: RuntimeConfig): ethers.Wallet {
+  const provider = new ethers.providers.InfuraProvider(
+    getNetworkName(config.chainId),
+  )
+  let wallet = ethers.Wallet.fromMnemonic(config.mnemonic)
+  wallet = wallet.connect(provider)
+  return wallet
 }
 
 function getConstructorABI(abi: any) {
