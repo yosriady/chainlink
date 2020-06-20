@@ -39,6 +39,7 @@ export default class Deploy extends Command {
   }
 
   private async deployContract(contractName: string, argv: string[]) {
+    // Check .beltrc exists
     if (!conf.exists()) {
       this.log(
         chalk.red(".beltrc not found - Run 'belt init -i' to get started."),
@@ -46,7 +47,15 @@ export default class Deploy extends Command {
       this.exit(1)
     }
 
+    // Initialize ethers wallet
     const options = conf.load()
+    const provider = new ethers.providers.InfuraProvider(
+      getNetworkName(options.chainId),
+    )
+    let wallet = ethers.Wallet.fromMnemonic(options.mnemonic)
+    wallet = wallet.connect(provider)
+
+    // Find contract ABI
     const cwd = process.cwd()
     const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
     if (!fs.existsSync(artifactPath)) {
@@ -58,13 +67,6 @@ export default class Deploy extends Command {
     const buffer = fs.readFileSync(artifactPath)
     const abi = JSON.parse(buffer.toString())
 
-    // Initialize ethers wallet
-    const provider = new ethers.providers.InfuraProvider(
-      getNetworkName(options.chainId),
-    )
-    let wallet = ethers.Wallet.fromMnemonic(options.mnemonic)
-    wallet = wallet.connect(provider)
-
     // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(
       abi['compilerOutput']['abi'],
@@ -72,12 +74,8 @@ export default class Deploy extends Command {
       wallet,
     )
 
-    // Validate function parameter length
-    const constructorABI = abi['compilerOutput']['abi'].find(
-      (i: { type: string }) => {
-        return i.type === 'constructor'
-      },
-    )
+    // Validate function constructor inputs
+    const constructorABI = parseConstructor(abi)
     const numConstructorInputs = constructorABI['inputs'].length
     const inputs = argv.slice(1)
     if (numConstructorInputs !== inputs.length) {
@@ -90,13 +88,25 @@ export default class Deploy extends Command {
     }
 
     // Deploy contract
-    const contract = await factory.deploy(...inputs)
-    cli.action.start(`Deploying ${contractName} to ${contract.address}`)
-
-    contract.deployTransaction.wait()
-
-    cli.action.stop('Deployed')
-    this.log(contract.address)
+    let contract
+    try {
+      contract = await factory.deploy(...inputs)
+      cli.action.start(`Deploying ${contractName} to ${contract.address}`)
+      contract.deployTransaction.wait()
+      cli.action.stop('Deployed')
+      this.log(contract.address)
+    } catch (e) {
+      this.error(e)
+    }
     return
   }
+}
+
+function parseConstructor(abi: any) {
+  const constructorABI = abi['compilerOutput']['abi'].find(
+    (i: { type: string }) => {
+      return i.type === 'constructor'
+    },
+  )
+  return constructorABI
 }
