@@ -103,7 +103,6 @@ export default class Call extends Command {
     )
 
     // Call contract
-    // TODO: add overrides e.g. gasprice, gaslimit
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
       const result = await contract[functionSignature](...commandInputs, {})

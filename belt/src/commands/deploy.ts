@@ -66,7 +66,7 @@ export default class Deploy extends Command {
     }
 
     // Initialize ethers wallet (signer + provider)
-    const wallet = initWallet(config)
+    const wallet = initSigner(config)
 
     // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(
@@ -91,7 +91,7 @@ export default class Deploy extends Command {
   }
 }
 
-function initWallet(config: RuntimeConfig): ethers.Wallet {
+function initSigner(config: RuntimeConfig): ethers.Wallet {
   const provider = new ethers.providers.InfuraProvider(
     getNetworkName(config.chainId),
   )

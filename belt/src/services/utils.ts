@@ -50,7 +50,7 @@ export function getJsonFile(path: string): unknown {
 }
 
 /**
- * Get the network name for a given chainId
+ * Returns the network name for a given chainId.
  *
  * @param chainId Ethereum chain ID
  */
@@ -61,13 +61,20 @@ export function getNetworkName(chainId: number): string {
     4: 'rinkeby',
     42: 'kovan',
   }
-  if (!Object.keys(networks).includes(chainId.toString())) {
+  const idNotFound = !Object.keys(networks).includes(chainId.toString())
+  if (idNotFound) {
     throw new Error('Invalid chain Id')
   }
 
   return networks[chainId]
 }
 
+/**
+ * Finds and loads the ABI of a chainlink smart contract.
+ *
+ * @param config .beltrc RuntimeConfig
+ * @param contractName e.g. 'AccessControlledAggregator'
+ */
 export function findABI(
   config: RuntimeConfig,
   contractName: string,
@@ -76,9 +83,9 @@ export function findABI(
   const artifactPath = join(cwd, config.artifactsDir, `${contractName}.json`)
 
   const found = fs.existsSync(artifactPath)
-  if (!found) return { found: false, abi: null }
+  if (!found) return { found, abi: null }
 
   const buffer = fs.readFileSync(artifactPath)
   const abi = JSON.parse(buffer.toString())
-  return { found: true, abi }
+  return { found, abi }
 }
