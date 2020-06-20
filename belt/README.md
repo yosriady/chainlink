@@ -29,6 +29,7 @@ USAGE
 <!-- usage -->
 ```sh-session
 $ cd evm-contracts/
+# belt compile solc
 $ belt init
 
 $ belt deploy ...
@@ -120,13 +121,13 @@ ARGUMENTS
   PATH  [default: .] .beltrc filepath
 
 OPTIONS
-  -c, --chainId=chainId                  Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
-  -d, --artifactsDir=artifactsDir        Ethers.js artifacts directory
-  -g, --gasPrice=gasPrice                Default gas price
+  -c, --chainId                          Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
+  -d, --artifactsDir                     ABI directory
+  -g, --gasPrice                         Default gas price
   -h, --help                             show CLI help
-  -l, --gasLimit=gasLimit                Default gas limit
-  -m, --mnemonic=mnemonic                Mnemonic for Ethereum wallet to send transactions from
-  -p, --infuraProjectId=infuraProjectId  Infura project ID
+  -l, --gasLimit                         Default gas limit
+  -m, --mnemonic                         Mnemonic for Ethereum wallet to send transactions from
+  -p, --infuraProjectId  Infura project ID
 
 EXAMPLES
   belt init
@@ -138,7 +139,7 @@ Example `.beltrc` file:
 ```json
 {
     "chainId": 4,
-    "mnemonic": "mail dawn focus web panther man penalty gospel transfer meat tent person",
+    "mnemonic": "person meat focus web panther man penalty gospel transfer gospel tent mail",
     "infuraProjectId": "fdf38d85d15e434e9b2ca152b7b1bc6f",
     "gasPrice": 40000000000,
     "gasLimit": 8000000,
