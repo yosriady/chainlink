@@ -3,12 +3,21 @@ import { join } from 'path'
 
 // Runtime configuration for belt deploy and belt exec
 export interface RuntimeConfig {
-  network: string
+  chainId: number
   mnemonic: string
   infuraProjectId: string
+  gasPrice: number
+  gasLimit: number
 }
 
 const RUNTIME_CONFIG = '.beltrc'
+const DEFAULTS: RuntimeConfig = {
+  chainId: 4,
+  mnemonic: '',
+  infuraProjectId: '',
+  gasPrice: 40000000000, // 40 gwei
+  gasLimit: 8000000,
+}
 
 /**
  * Helper for reading from and writing RuntimeConfig to .beltrc
@@ -26,6 +35,14 @@ export class RuntimeConfigParser {
 
   filepath(): string {
     return join(this.path, RUNTIME_CONFIG)
+  }
+
+  load(): RuntimeConfig {
+    let result = DEFAULTS
+    if (this.exists()) {
+      result = this.get()
+    }
+    return result
   }
 
   get(): RuntimeConfig {

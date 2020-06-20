@@ -6,9 +6,12 @@ describe('RuntimeConfig', () => {
 
   function getSampleConf(): RuntimeConfig {
     return {
-      network: 'rinkeby',
-      mnemonic: 'raise clutch area heavy horn course filter farm deny solid finger sudden',
+      chainId: 4,
+      mnemonic:
+        'raise clutch area heavy horn course filter farm deny solid finger sudden',
       infuraProjectId: 'fdf38d85d15e434e9b2ca152b7b1bc6f',
+      gasPrice: 40000000000, // 40 gwei
+      gasLimit: 8000000,
     }
   }
 

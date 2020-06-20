@@ -17,7 +17,7 @@ describe('init tests', () => {
 
   it('should write to runtime config', async () => {
     await Init.run([
-      "-m 'raise clutch area heavy horn course filter farm deny solid finger sudden' -n rinkeby -p fdf38d85d15e434e9b2ca152b7b1bc6f",
+      "-m 'raise clutch area heavy horn course filter farm deny solid finger sudden' -c 4 -p fdf38d85d15e434e9b2ca152b7b1bc6f",
       TEST_FS_PATH,
     ])
 
@@ -25,7 +25,7 @@ describe('init tests', () => {
   })
 
   it('should support partial updates to runtime config', async () => {
-    await Init.run(['-n mainnet', TEST_FS_PATH])
+    await Init.run(['-p gdf38d85d15e434e9b2ca152b7b1bc6f', TEST_FS_PATH])
 
     expect(cat(RUNTIME_CONFIG_PATH).stdout).toMatchSnapshot()
   })

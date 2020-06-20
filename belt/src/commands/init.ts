@@ -8,19 +8,17 @@ import {
   RuntimeConfigParser as Config,
 } from '../services/runtimeConfig'
 
-const NETWORKS = ['mainnet', 'rinkeby', 'kovan']
-const DEFAULTS: RuntimeConfig = {
-  network: '',
-  mnemonic: '',
-  infuraProjectId: '',
-}
+const NETWORKS = [
+  { value: 1, name: 'mainnet' },
+  { value: 4, name: 'rinkeby' },
+]
 
 export default class Init extends Command {
   static description = 'Initialize .beltrc file'
 
   static examples = [
     'belt init -i',
-    "belt box --network rinkeby --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... test-dir/",
+    "belt box --chainId 4 --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... test-dir/",
   ]
 
   static flags = {
@@ -29,10 +27,10 @@ export default class Init extends Command {
       char: 'i',
       description: 'run this command in interactive mode',
     }),
-    network: flags.string({
-      char: 'n',
+    chainId: flags.integer({
+      char: 'c',
       description:
-        'Ethereum network to send transactions to e.g. mainnet, rinkeby',
+        'Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)',
     }),
     mnemonic: flags.string({
       char: 'm',
@@ -41,6 +39,14 @@ export default class Init extends Command {
     infuraProjectId: flags.string({
       char: 'p',
       description: 'Infura project ID',
+    }),
+    gasPrice: flags.integer({
+      char: 'g',
+      description: 'Default gas price',
+    }),
+    gasLimit: flags.integer({
+      char: 'l',
+      description: 'Default gas limit',
     }),
   }
 
@@ -60,73 +66,90 @@ export default class Init extends Command {
       return await this.handleInteractive(args.path)
     } else {
       return this.handleNonInteractive(
-        flags.network,
+        flags.chainId,
         flags.mnemonic,
         flags.infuraProjectId,
+        flags.gasPrice,
+        flags.gasLimit,
         args.path,
       )
     }
   }
 
   private async handleInteractive(path: string) {
-    let defaults = DEFAULTS
     const conf = new Config(path)
+    const current = conf.load()
 
-    if (conf.exists()) {
-      this.log(chalk.greenBright('.beltrc found, loading values'))
-      defaults = conf.get()
-    }
-
-    const { network, mnemonic, infuraProjectId } = await cli.prompt([
+    const {
+      chainId,
+      mnemonic,
+      infuraProjectId,
+      gasPrice,
+      gasLimit,
+    } = await cli.prompt([
       {
-        name: 'network',
+        name: 'chainId',
         type: 'list',
         choices: NETWORKS,
-        message: 'Which network do you want to make transactions on?',
-        default: defaults.network,
+        message: 'Enter default network:',
+        default: current.chainId,
       },
       {
         name: 'mnemonic',
         type: 'input',
         message: 'Enter 12-word mnemonic:',
-        default: defaults.mnemonic,
+        default: current.mnemonic,
       },
       {
         name: 'infuraProjectId',
         type: 'input',
         message: 'Enter infuraProjectId:',
-        default: defaults.infuraProjectId,
+        default: current.infuraProjectId,
+      },
+      {
+        name: 'gasPrice',
+        type: 'input',
+        message: 'Enter default gasPrice:',
+        default: current.gasPrice,
+      },
+      {
+        name: 'gasLimit',
+        type: 'input',
+        message: 'Enter default gasLimit:',
+        default: current.gasLimit,
       },
     ])
 
     const config: RuntimeConfig = {
-      network,
+      chainId,
       mnemonic,
       infuraProjectId,
+      gasPrice,
+      gasLimit,
     }
     conf.set(config)
-    this.log(chalk.greenBright(`.beltrc initialized in ${conf.filepath()}`))
+    this.log(chalk.greenBright(`.beltrc saved in ${conf.filepath()}`))
   }
 
   private handleNonInteractive(
-    network: string | undefined,
+    chainId: number | undefined,
     mnemonic: string | undefined,
     infuraProjectId: string | undefined,
+    gasPrice: number | undefined,
+    gasLimit: number | undefined,
     path: string,
   ) {
-    let defaults = DEFAULTS
     const conf = new Config(path)
-    if (conf.exists()) {
-      this.log(chalk.greenBright('.beltrc found, loading values'))
-      defaults = conf.get()
-    }
+    const current = conf.load()
 
     const config = {
-      network: network || defaults.network,
-      mnemonic: mnemonic || defaults.mnemonic,
-      infuraProjectId: infuraProjectId || defaults.infuraProjectId,
+      chainId: chainId || current.chainId,
+      mnemonic: mnemonic || current.mnemonic,
+      infuraProjectId: infuraProjectId || current.infuraProjectId,
+      gasPrice: gasPrice || current.gasPrice,
+      gasLimit: gasLimit || current.gasLimit,
     }
     conf.set(config)
-    this.log(chalk.greenBright(`.beltrc initialized in ${conf.filepath()}`))
+    this.log(chalk.greenBright(`.beltrc saved in ${conf.filepath()}`))
   }
 }
