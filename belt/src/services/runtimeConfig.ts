@@ -21,7 +21,7 @@ export class RuntimeConfigParser {
   }
 
   exists(): boolean {
-    return fs.existsSync(join(this.path, RUNTIME_CONFIG))
+    return fs.existsSync(this.filepath())
   }
 
   filepath(): string {
@@ -29,8 +29,13 @@ export class RuntimeConfigParser {
   }
 
   get(): RuntimeConfig {
-    const buffer = fs.readFileSync(join(this.path, RUNTIME_CONFIG), 'utf8')
-    const result = JSON.parse(buffer.toString())
+    let result
+    try {
+      const buffer = fs.readFileSync(this.filepath(), 'utf8')
+      result = JSON.parse(buffer.toString())
+    } catch (e) {
+      throw Error(`Could not load .beltrc at ${this.path}`)
+    }
     return result
   }
 
@@ -40,9 +45,6 @@ export class RuntimeConfigParser {
     // assert(config.mnemonic);
     // assert(config.infuraProjectId);
 
-    fs.writeFileSync(
-      join(this.path, RUNTIME_CONFIG),
-      JSON.stringify(config, null, 4),
-    )
+    fs.writeFileSync(this.filepath(), JSON.stringify(config, null, 4))
   }
 }
