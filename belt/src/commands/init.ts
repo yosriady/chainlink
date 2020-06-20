@@ -48,6 +48,10 @@ export default class Init extends Command {
       char: 'l',
       description: 'Default gas limit',
     }),
+    artifactsDir: flags.string({
+      char: 'd',
+      description: 'Ethers.js artifacts directory',
+    }),
   }
 
   static args: Parser.args.IArg[] = [
@@ -71,6 +75,7 @@ export default class Init extends Command {
         flags.infuraProjectId,
         flags.gasPrice,
         flags.gasLimit,
+        flags.artifactsDir,
         args.path,
       )
     }
@@ -78,7 +83,7 @@ export default class Init extends Command {
 
   private async handleInteractive(path: string) {
     const conf = new Config(path)
-    const current = conf.load()
+    const current = conf.get()
 
     const {
       chainId,
@@ -86,6 +91,7 @@ export default class Init extends Command {
       infuraProjectId,
       gasPrice,
       gasLimit,
+      artifactsDir,
     } = await cli.prompt([
       {
         name: 'chainId',
@@ -118,6 +124,12 @@ export default class Init extends Command {
         message: 'Enter default gasLimit:',
         default: current.gasLimit,
       },
+      {
+        name: 'artifactsDir',
+        type: 'input',
+        message: 'Enter artifactsDir:',
+        default: current.artifactsDir,
+      },
     ])
 
     const config: RuntimeConfig = {
@@ -126,6 +138,7 @@ export default class Init extends Command {
       infuraProjectId,
       gasPrice,
       gasLimit,
+      artifactsDir,
     }
     conf.set(config)
     this.log(chalk.greenBright(`.beltrc saved in ${conf.filepath()}`))
@@ -137,10 +150,11 @@ export default class Init extends Command {
     infuraProjectId: string | undefined,
     gasPrice: number | undefined,
     gasLimit: number | undefined,
+    artifactsDir: string | undefined,
     path: string,
   ) {
     const conf = new Config(path)
-    const current = conf.load()
+    const current = conf.get()
 
     const config = {
       chainId: chainId || current.chainId,
@@ -148,6 +162,7 @@ export default class Init extends Command {
       infuraProjectId: infuraProjectId || current.infuraProjectId,
       gasPrice: gasPrice || current.gasPrice,
       gasLimit: gasLimit || current.gasLimit,
+      artifactsDir: artifactsDir || current.artifactsDir,
     }
     conf.set(config)
     this.log(chalk.greenBright(`.beltrc saved in ${conf.filepath()}`))

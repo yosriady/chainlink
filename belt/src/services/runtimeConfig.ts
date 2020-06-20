@@ -8,6 +8,7 @@ export interface RuntimeConfig {
   infuraProjectId: string
   gasPrice: number
   gasLimit: number
+  artifactsDir: string
 }
 
 const RUNTIME_CONFIG = '.beltrc'
@@ -17,6 +18,7 @@ const DEFAULTS: RuntimeConfig = {
   infuraProjectId: '',
   gasPrice: 40000000000, // 40 gwei
   gasLimit: 8000000,
+  artifactsDir: 'ethers/v0.6',
 }
 
 /**
@@ -37,15 +39,15 @@ export class RuntimeConfigParser {
     return join(this.path, RUNTIME_CONFIG)
   }
 
-  load(): RuntimeConfig {
+  get(): RuntimeConfig {
     let result = DEFAULTS
     if (this.exists()) {
-      result = this.get()
+      result = this.load()
     }
     return result
   }
 
-  get(): RuntimeConfig {
+  load(): RuntimeConfig {
     let result
     try {
       const buffer = fs.readFileSync(this.filepath(), 'utf8')

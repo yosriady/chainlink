@@ -12,6 +12,7 @@ describe('RuntimeConfig', () => {
       infuraProjectId: 'fdf38d85d15e434e9b2ca152b7b1bc6f',
       gasPrice: 40000000000, // 40 gwei
       gasLimit: 8000000,
+      artifactsDir: 'ethers/v0.6',
     }
   }
 
@@ -25,7 +26,7 @@ describe('RuntimeConfig', () => {
       'test-dir': {},
     })
 
-    expect(() => conf.get()).toThrowError('Could not load .beltrc')
+    expect(() => conf.load()).toThrowError('Could not load .beltrc')
   })
 
   // TODO: additional test cases for validation
@@ -38,6 +39,6 @@ describe('RuntimeConfig', () => {
       },
     })
 
-    expect(conf.get()).toStrictEqual({ ...getSampleConf() })
+    expect(conf.load()).toStrictEqual({ ...getSampleConf() })
   })
 })
