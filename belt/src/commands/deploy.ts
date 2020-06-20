@@ -20,7 +20,7 @@ export default class Deploy extends Command {
 
   static flags = {
     help: flags.help({ char: 'h' }),
-    // TODO: override flags for gas price, gas limit
+    // TODO: Add override flags for gas price, gas limit, nonce
   }
 
   static args: Parser.args.IArg[] = [
@@ -33,13 +33,10 @@ export default class Deploy extends Command {
   async run() {
     const { args, argv } = this.parse(Deploy)
 
-    await this.deploy(args, argv)
+    await this.deployContract(args.contractName, argv)
   }
 
-  private async deploy(
-    args: { [x: string]: any; contractName?: any },
-    argv: string[],
-  ) {
+  private async deployContract(contractName: string, argv: string[]) {
     if (!conf.exists()) {
       this.log(
         chalk.red(".beltrc not found - Run 'belt init -i' to get started."),
@@ -49,40 +46,38 @@ export default class Deploy extends Command {
 
     const options = conf.load()
     const cwd = process.cwd()
-    const artifactPath = join(
-      cwd,
-      options.artifactsDir,
-      `${args.contractName}.json`,
-    )
+    const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
     if (!fs.existsSync(artifactPath)) {
       this.log(chalk.red(`ABI not found at ${artifactPath}`))
       this.exit(1)
     }
 
+    // Load contract ABI
     const buffer = fs.readFileSync(artifactPath)
-    const artifact = JSON.parse(buffer.toString())
+    const abi = JSON.parse(buffer.toString())
 
     // Initialize ethers wallet
-    const provider = ethers.getDefaultProvider(getNetworkName(options.chainId))
+    const provider = new ethers.providers.InfuraProvider(
+      getNetworkName(options.chainId),
+    )
     let wallet = ethers.Wallet.fromMnemonic(options.mnemonic)
     wallet = wallet.connect(provider)
 
-    // TODO: intialize ethers contract factory
+    // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(
-      artifact['compilerOutput']['abi'],
-      artifact['compilerOutput']['evm']['bytecode'],
+      abi['compilerOutput']['abi'],
+      abi['compilerOutput']['evm']['bytecode'],
       wallet,
     )
 
     // TODO: parse ABI for object of "type": "constructor"
-    const constructorInputs = args.slice(1)
+    const constructorInputs = argv.slice(1)
     // TODO: validate number of parameters
 
     const contract = await factory.deploy(constructorInputs)
-    cli.action.start(`Deploying ${args.contractName} to ${contract.address}`)
+    cli.action.start(`Deploying ${contractName} to ${contract.address}`)
 
     contract.deployTransaction.wait()
-    // TODO: add loading spinner
 
     cli.action.stop('Deployed')
     this.log(contract.address)
