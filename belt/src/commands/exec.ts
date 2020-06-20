@@ -14,7 +14,7 @@ export default class Exec extends Command {
 
   static examples = [
     'belt exec [<options>] <contract> <address> <sig> [<args>]',
-    'belt exec AccessControlledAggregator TODO',
+    "belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0x67b260DffCE59E890CfAe9ec733921357732f90a",
   ]
   static strict = false
 
@@ -71,7 +71,7 @@ export default class Exec extends Command {
       )
     }
 
-    // Validate constructor inputs and user input length
+    // Validate command inputs against function inputs
     const functionName = getFunctionName(functionSignature)
     const functionABI = getFunctionABI(abi, functionName)
     const numFunctionInputs = functionABI['inputs'].length
@@ -96,11 +96,14 @@ export default class Exec extends Command {
 
     // Call contract
     try {
+      cli.action.start(
+        `Executing ${contractName} ${functionSignature} ${commandInputs.toString}`,
+      )
       // TODO: add overrides e.g. gasprice, gaslimit
-      const receipt = await contract[functionSignature](...commandInputs, {})
-      this.log(receipt)
-      this.log('----')
-      this.log(receipt.wait)
+      const tx = await contract[functionSignature](...commandInputs, {})
+      const receipt = await tx.wait() // defaults to 1 confirmation
+      cli.action.stop(`Executed in tx ${receipt.transactionHash}`)
+      this.log(receipt.transactionHash)
     } catch (e) {
       this.error(e)
     }

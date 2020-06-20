@@ -53,7 +53,7 @@ export default class Deploy extends Command {
       )
     }
 
-    // Validate constructor inputs and user input length
+    // Validate command inputs against constructor inputs
     const constructorABI = getConstructorABI(abi)
     const numConstructorInputs = constructorABI['inputs'].length
     const commandInputs = argv.slice(Object.keys(Deploy.args).length)
@@ -76,13 +76,13 @@ export default class Deploy extends Command {
     )
 
     // Deploy contract
-    let contract
+    let contract: ethers.Contract
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
       contract = await factory.deploy(...commandInputs, {})
       cli.action.start(`Deploying ${contractName} to ${contract.address} `)
-      contract.deployTransaction.wait()
-      cli.action.stop('Deployed')
+      const receipt = await contract.deployTransaction.wait() // defaults to 1 confirmation
+      cli.action.stop(`Deployed in tx ${receipt.transactionHash}`)
       this.log(contract.address)
     } catch (e) {
       this.error(e)

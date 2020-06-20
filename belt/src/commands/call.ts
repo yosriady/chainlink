@@ -19,7 +19,6 @@ export default class Call extends Command {
 
   static flags = {
     help: flags.help({ char: 'h' }),
-    // TODO: Add override flags for gas price, gas limit, nonce
   }
 
   static args: Parser.args.IArg[] = [
@@ -77,7 +76,7 @@ export default class Call extends Command {
       )
     }
 
-    // Validate function inputs
+    // Validate command inputs against function inputs
     const functionName = getFunctionName(functionSignature)
     const functionABI = getFunctionABI(abi, functionName)
     const numFunctionInputs = functionABI['inputs'].length
@@ -104,8 +103,7 @@ export default class Call extends Command {
 
     // Call contract
     try {
-      // TODO: add overrides e.g. gasprice, gaslimit
-      const result = await contract[functionSignature](...commandInputs, {})
+      const result = await contract[functionSignature](...commandInputs)
       this.log(result)
     } catch (e) {
       this.error(e)
