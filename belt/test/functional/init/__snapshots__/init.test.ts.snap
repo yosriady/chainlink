@@ -1,0 +1,17 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`init tests should support partial updates to runtime config 1`] = `
+"{
+    \\"network\\": \\" mainnet\\",
+    \\"mnemonic\\": \\" 'raise clutch area heavy horn course filter farm deny solid finger sudden' -n rinkeby -p fdf38d85d15e434e9b2ca152b7b1bc6f\\",
+    \\"infuraProjectId\\": \\"\\"
+}"
+`;
+
+exports[`init tests should write to runtime config 1`] = `
+"{
+    \\"network\\": \\"\\",
+    \\"mnemonic\\": \\" 'raise clutch area heavy horn course filter farm deny solid finger sudden' -n rinkeby -p fdf38d85d15e434e9b2ca152b7b1bc6f\\",
+    \\"infuraProjectId\\": \\"\\"
+}"
+`;

@@ -1,7 +1,16 @@
+/* eslint-disable @typescript-eslint/no-use-before-define */
 import fs from 'fs'
+import { join } from 'path'
 import { Command, flags } from '@oclif/command'
+import * as Parser from '@oclif/parser'
 import * as cli from 'inquirer'
 import chalk from 'chalk'
+
+export interface RuntimeConfig {
+  network: string
+  mnemonic: string
+  infuraProjectId: string
+}
 
 const RUNTIME_CONFIG = '.beltrc'
 const NETWORKS = ['mainnet', 'rinkeby', 'kovan']
@@ -11,18 +20,12 @@ const DEFAULTS: RuntimeConfig = {
   infuraProjectId: '',
 }
 
-export interface RuntimeConfig {
-  network: string
-  mnemonic: string
-  infuraProjectId: string
-}
-
 export default class Init extends Command {
   static description = 'Initialize .beltrc file'
 
   static examples = [
-    'belt init -i',
-    'belt box --network rinkeby --mnemonic <...> --infuraProjectId <...>',
+    'belt init -i .',
+    "belt box --network rinkeby --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... test-dir/",
   ]
 
   static flags = {
@@ -46,26 +49,36 @@ export default class Init extends Command {
     }),
   }
 
+  static args: Parser.args.IArg[] = [
+    {
+      name: 'path',
+      description: '.beltrc filepath',
+    },
+  ]
+
   async run() {
-    const { flags } = this.parse(Init)
+    const { flags, args } = this.parse(Init)
     this.log('Initializing .beltrc')
 
     if (flags.interactive) {
-      return await this.handleInteractive()
+      return await this.handleInteractive(args.path)
     } else {
       return this.handleNonInteractive(
         flags.network,
         flags.mnemonic,
         flags.infuraProjectId,
+        args.path,
       )
     }
   }
 
-  private async handleInteractive() {
+  private async handleInteractive(path: string) {
     let defaults = DEFAULTS
-    if (runtimeConfigExists()) {
-      this.log(chalk.greenBright('.beltrc already exists'))
-      defaults = getRuntimeConfig()
+    const conf = new ConfigParser(path)
+
+    if (conf.exists()) {
+      this.log(chalk.greenBright('.beltrc exists'))
+      defaults = conf.get()
     }
 
     const { network, mnemonic, infuraProjectId } = await cli.prompt([
@@ -90,24 +103,28 @@ export default class Init extends Command {
       },
     ])
 
-    const config = {
+    const config: RuntimeConfig = {
       network,
       mnemonic,
       infuraProjectId,
     }
-    setRuntimeConfig(config)
-    this.log(chalk.greenBright('.beltrc initialized in current directory'))
+    conf.set(config)
+    this.log(
+      chalk.greenBright(`.beltrc initialized in ${join(path, RUNTIME_CONFIG)}`),
+    )
   }
 
   private handleNonInteractive(
     network: string | undefined,
     mnemonic: string | undefined,
     infuraProjectId: string | undefined,
+    path: string,
   ) {
     let defaults = DEFAULTS
-    if (runtimeConfigExists()) {
-      this.log(chalk.greenBright('.beltrc already exists, updating values'))
-      defaults = getRuntimeConfig()
+    const conf = new ConfigParser(path)
+    if (conf.exists()) {
+      this.log(chalk.greenBright('.beltrc exists, updating values'))
+      defaults = conf.get()
     }
 
     const config = {
@@ -115,21 +132,39 @@ export default class Init extends Command {
       mnemonic: mnemonic || defaults.mnemonic,
       infuraProjectId: infuraProjectId || defaults.infuraProjectId,
     }
-    setRuntimeConfig(config)
-    this.log(chalk.greenBright('.beltrc initialized in current directory'))
+    conf.set(config)
+    this.log(
+      chalk.greenBright(`.beltrc initialized in ${join(path, RUNTIME_CONFIG)}`),
+    )
   }
 }
 
-function runtimeConfigExists(): boolean {
-  return fs.existsSync(RUNTIME_CONFIG)
-}
+/**
+ * Helper for reading from and writing RuntimeConfig to .beltrc
+ */
+class ConfigParser {
+  path: string
 
-function getRuntimeConfig(): RuntimeConfig {
-  const buffer = fs.readFileSync(RUNTIME_CONFIG)
-  const result = JSON.parse(buffer.toString())
-  return result
-}
+  constructor(path: string) {
+    this.path = path
+  }
 
-function setRuntimeConfig(config: RuntimeConfig) {
-  fs.writeFileSync(RUNTIME_CONFIG, JSON.stringify(config, null, 4))
+  exists(): boolean {
+    return fs.existsSync(join(this.path, RUNTIME_CONFIG))
+  }
+
+  get(): RuntimeConfig {
+    const buffer = fs.readFileSync(join(this.path, RUNTIME_CONFIG))
+    const result = JSON.parse(buffer.toString())
+    return result
+  }
+
+  set(config: RuntimeConfig) {
+    // TODO: validate config
+
+    fs.writeFileSync(
+      join(this.path, RUNTIME_CONFIG),
+      JSON.stringify(config, null, 4),
+    )
+  }
 }
