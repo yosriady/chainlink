@@ -24,7 +24,7 @@ export default class Init extends Command {
   static description = 'Initialize .beltrc file'
 
   static examples = [
-    'belt init -i .',
+    'belt init -i',
     "belt box --network rinkeby --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... test-dir/",
   ]
 
@@ -53,6 +53,7 @@ export default class Init extends Command {
     {
       name: 'path',
       description: '.beltrc filepath',
+      default: '.',
     },
   ]
 
@@ -161,6 +162,9 @@ class ConfigParser {
 
   set(config: RuntimeConfig) {
     // TODO: validate config
+    // assert(config.network);
+    // assert(config.mnemonic);
+    // assert(config.infuraProjectId);
 
     fs.writeFileSync(
       join(this.path, RUNTIME_CONFIG),
