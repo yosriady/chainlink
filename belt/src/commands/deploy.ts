@@ -94,6 +94,7 @@ export default class Deploy extends Command {
 function initSigner(config: RuntimeConfig): ethers.Wallet {
   const provider = new ethers.providers.InfuraProvider(
     getNetworkName(config.chainId),
+    { projectId: config.infuraProjectId },
   )
   let wallet = ethers.Wallet.fromMnemonic(config.mnemonic)
   wallet = wallet.connect(provider)

@@ -92,6 +92,7 @@ export default class Call extends Command {
     // Initialize ethers provider
     const provider = new ethers.providers.InfuraProvider(
       getNetworkName(config.chainId),
+      { projectId: config.infuraProjectId },
     )
 
     // Initialize contract
