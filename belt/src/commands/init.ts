@@ -1,18 +1,13 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import fs from 'fs'
-import { join } from 'path'
 import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import * as cli from 'inquirer'
 import chalk from 'chalk'
+import {
+  RuntimeConfig,
+  RuntimeConfigParser as Config,
+} from '../services/runtimeConfig'
 
-export interface RuntimeConfig {
-  network: string
-  mnemonic: string
-  infuraProjectId: string
-}
-
-const RUNTIME_CONFIG = '.beltrc'
 const NETWORKS = ['mainnet', 'rinkeby', 'kovan']
 const DEFAULTS: RuntimeConfig = {
   network: '',
@@ -75,10 +70,10 @@ export default class Init extends Command {
 
   private async handleInteractive(path: string) {
     let defaults = DEFAULTS
-    const conf = new ConfigParser(path)
+    const conf = new Config(path)
 
     if (conf.exists()) {
-      this.log(chalk.greenBright('.beltrc exists'))
+      this.log(chalk.greenBright('.beltrc found, loading values'))
       defaults = conf.get()
     }
 
@@ -110,9 +105,7 @@ export default class Init extends Command {
       infuraProjectId,
     }
     conf.set(config)
-    this.log(
-      chalk.greenBright(`.beltrc initialized in ${join(path, RUNTIME_CONFIG)}`),
-    )
+    this.log(chalk.greenBright(`.beltrc initialized in ${conf.filepath()}`))
   }
 
   private handleNonInteractive(
@@ -122,9 +115,9 @@ export default class Init extends Command {
     path: string,
   ) {
     let defaults = DEFAULTS
-    const conf = new ConfigParser(path)
+    const conf = new Config(path)
     if (conf.exists()) {
-      this.log(chalk.greenBright('.beltrc exists, updating values'))
+      this.log(chalk.greenBright('.beltrc found, loading values'))
       defaults = conf.get()
     }
 
@@ -134,41 +127,6 @@ export default class Init extends Command {
       infuraProjectId: infuraProjectId || defaults.infuraProjectId,
     }
     conf.set(config)
-    this.log(
-      chalk.greenBright(`.beltrc initialized in ${join(path, RUNTIME_CONFIG)}`),
-    )
-  }
-}
-
-/**
- * Helper for reading from and writing RuntimeConfig to .beltrc
- */
-class ConfigParser {
-  path: string
-
-  constructor(path: string) {
-    this.path = path
-  }
-
-  exists(): boolean {
-    return fs.existsSync(join(this.path, RUNTIME_CONFIG))
-  }
-
-  get(): RuntimeConfig {
-    const buffer = fs.readFileSync(join(this.path, RUNTIME_CONFIG))
-    const result = JSON.parse(buffer.toString())
-    return result
-  }
-
-  set(config: RuntimeConfig) {
-    // TODO: validate config
-    // assert(config.network);
-    // assert(config.mnemonic);
-    // assert(config.infuraProjectId);
-
-    fs.writeFileSync(
-      join(this.path, RUNTIME_CONFIG),
-      JSON.stringify(config, null, 4),
-    )
+    this.log(chalk.greenBright(`.beltrc initialized in ${conf.filepath()}`))
   }
 }
