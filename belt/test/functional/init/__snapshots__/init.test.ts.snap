@@ -7,7 +7,7 @@ exports[`init tests should support partial updates to runtime config 1`] = `
     \\"infuraProjectId\\": \\" gdf38d85d15e434e9b2ca152b7b1bc6f\\",
     \\"gasPrice\\": 40000000000,
     \\"gasLimit\\": 8000000,
-    \\"artifactsDir\\": \\"ethers/v0.6\\"
+    \\"artifactsDir\\": \\"abi/v0.6\\"
 }"
 `;
 
@@ -18,6 +18,6 @@ exports[`init tests should write to runtime config 1`] = `
     \\"infuraProjectId\\": \\"\\",
     \\"gasPrice\\": 40000000000,
     \\"gasLimit\\": 8000000,
-    \\"artifactsDir\\": \\"ethers/v0.6\\"
+    \\"artifactsDir\\": \\"abi/v0.6\\"
 }"
 `;

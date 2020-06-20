@@ -18,7 +18,7 @@ const DEFAULTS: RuntimeConfig = {
   infuraProjectId: '',
   gasPrice: 40000000000, // 40 gwei
   gasLimit: 8000000,
-  artifactsDir: 'ethers/v0.6',
+  artifactsDir: 'abi/v0.6',
 }
 
 /**
@@ -27,7 +27,7 @@ const DEFAULTS: RuntimeConfig = {
 export class RuntimeConfigParser {
   path: string
 
-  constructor(path: string) {
+  constructor(path = '.') {
     this.path = path
   }
 

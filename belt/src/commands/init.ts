@@ -3,10 +3,7 @@ import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import * as cli from 'inquirer'
 import chalk from 'chalk'
-import {
-  RuntimeConfig,
-  RuntimeConfigParser as Config,
-} from '../services/runtimeConfig'
+import { RuntimeConfig, RuntimeConfigParser } from '../services/runtimeConfig'
 
 const NETWORKS = [
   { value: 1, name: 'mainnet' },
@@ -82,7 +79,7 @@ export default class Init extends Command {
   }
 
   private async handleInteractive(path: string) {
-    const conf = new Config(path)
+    const conf = new RuntimeConfigParser(path)
     const current = conf.get()
 
     const {
@@ -153,7 +150,7 @@ export default class Init extends Command {
     artifactsDir: string | undefined,
     path: string,
   ) {
-    const conf = new Config(path)
+    const conf = new RuntimeConfigParser(path)
     const current = conf.get()
 
     const config = {
