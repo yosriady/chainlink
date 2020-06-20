@@ -47,7 +47,7 @@ export default class Deploy extends Command {
       this.exit(1)
     }
 
-    // Initialize ethers wallet
+    // Initialize ethers wallet (signer + provider)
     const options = conf.load()
     const provider = new ethers.providers.InfuraProvider(
       getNetworkName(options.chainId),
@@ -74,14 +74,14 @@ export default class Deploy extends Command {
       wallet,
     )
 
-    // Validate function constructor inputs
-    const constructorABI = parseConstructor(abi)
+    // Validate constructor inputs
+    const constructorABI = getConstructorABI(abi)
     const numConstructorInputs = constructorABI['inputs'].length
-    const inputs = argv.slice(1)
+    const inputs = argv.slice(Object.keys(Deploy.args).length)
     if (numConstructorInputs !== inputs.length) {
       this.log(
         chalk.red(
-          `Received ${inputs.length} arguments, expected ${numConstructorInputs}`,
+          `Received ${inputs.length} arguments, constructor expected ${numConstructorInputs}`,
         ),
       )
       this.exit(1)
@@ -90,8 +90,9 @@ export default class Deploy extends Command {
     // Deploy contract
     let contract
     try {
+      // TODO: add overrides e.g. gasprice, gaslimit
       contract = await factory.deploy(...inputs)
-      cli.action.start(`Deploying ${contractName} to ${contract.address}`)
+      cli.action.start(`Deploying ${contractName} to ${contract.address} `)
       contract.deployTransaction.wait()
       cli.action.stop('Deployed')
       this.log(contract.address)
@@ -102,7 +103,7 @@ export default class Deploy extends Command {
   }
 }
 
-function parseConstructor(abi: any) {
+function getConstructorABI(abi: any) {
   const constructorABI = abi['compilerOutput']['abi'].find(
     (i: { type: string }) => {
       return i.type === 'constructor'
