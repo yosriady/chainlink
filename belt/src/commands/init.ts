@@ -16,16 +16,12 @@ export default class Init extends Command {
   static description = 'Initialize .beltrc file'
 
   static examples = [
-    'belt init -i',
-    "belt box --chainId 4 --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... test-dir/",
+    'belt init',
+    "belt init --chainId 4 --mnemonic 'raise clutch area ...' --infuraProjectId fdf38d... my-project/",
   ]
 
   static flags = {
     help: flags.help({ char: 'h' }),
-    interactive: flags.boolean({
-      char: 'i',
-      description: 'run this command in interactive mode',
-    }),
     chainId: flags.integer({
       char: 'c',
       description:
@@ -65,7 +61,8 @@ export default class Init extends Command {
     const { flags, args } = this.parse(Init)
     this.log('Initializing .beltrc')
 
-    if (flags.interactive) {
+    const noFlags = Object.keys(flags).length === 0
+    if (noFlags) {
       return await this.handleInteractive(args.path)
     } else {
       return this.handleNonInteractive(

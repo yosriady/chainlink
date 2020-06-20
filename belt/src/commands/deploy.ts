@@ -59,7 +59,9 @@ export default class Deploy extends Command {
     const cwd = process.cwd()
     const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
     if (!fs.existsSync(artifactPath)) {
-      this.log(chalk.red(`ABI not found at ${artifactPath}`))
+      this.log(
+        chalk.red(`ABI not found at ${artifactPath} - Run 'belt compile'`),
+      )
       this.exit(1)
     }
 

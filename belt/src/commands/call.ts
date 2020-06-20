@@ -16,7 +16,7 @@ export default class Call extends Command {
 
   static examples = [
     'belt call [<options>] <contract> <address> <sig> [<args>]',
-    'belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD description()',
+    "belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'",
   ]
   static strict = false
 
@@ -65,6 +65,14 @@ export default class Call extends Command {
       this.exit(1)
     }
 
+    // Validate function signature
+    if (!isValidSignature(functionSignature)) {
+      this.log(
+        chalk.red("Invalid function signature - belt call ... 'decimals()'"),
+      )
+      this.exit(1)
+    }
+
     // Initialize ethers wallet (signer + provider)
     const options = conf.load()
     const provider = new ethers.providers.InfuraProvider(
@@ -75,7 +83,9 @@ export default class Call extends Command {
     const cwd = process.cwd()
     const artifactPath = join(cwd, options.artifactsDir, `${contractName}.json`)
     if (!fs.existsSync(artifactPath)) {
-      this.log(chalk.red(`ABI not found at ${artifactPath}`))
+      this.log(
+        chalk.red(`ABI not found at ${artifactPath} - Run 'belt compile'`),
+      )
       this.exit(1)
     }
 
@@ -89,9 +99,7 @@ export default class Call extends Command {
       provider,
     )
 
-    // Validate constructor inputs
-    // TODO: extract this logic
-    // TODO: also, validate function signature has parens before this point
+    // Validate function inputs
     const functionName = getFunctionName(functionSignature)
     const functionABI = getFunctionABI(abi, functionName)
     const numFunctionInputs = functionABI['inputs'].length
@@ -109,6 +117,14 @@ export default class Call extends Command {
     const result = await contract[functionSignature](...inputs)
     this.log(result)
   }
+}
+
+function isValidSignature(functionSignature: string) {
+  const leftParenIdx = functionSignature.indexOf('(')
+  const rightParenIdx = functionSignature.indexOf(')')
+  const validParens =
+    leftParenIdx > -1 && rightParenIdx > -1 && rightParenIdx > leftParenIdx
+  return validParens
 }
 
 function getFunctionName(functionSignature: string) {
