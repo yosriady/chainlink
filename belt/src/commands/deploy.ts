@@ -3,8 +3,11 @@ import fs from 'fs'
 import { join } from 'path'
 import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
+import cli from 'cli-ux'
 import chalk from 'chalk'
+import { ethers } from 'ethers'
 import { RuntimeConfigParser } from '../services/runtimeConfig'
+import { getNetworkName } from '../services/utils'
 
 // const ETHERS_ARTIFACTS_DIR = 'ethers'
 const conf = new RuntimeConfigParser()
@@ -20,7 +23,6 @@ export default class Deploy extends Command {
     // TODO: override flags for gas price, gas limit
   }
 
-  // TODO: figure out how to read ...rest args
   static args: Parser.args.IArg[] = [
     {
       name: 'contractName',
@@ -31,12 +33,10 @@ export default class Deploy extends Command {
   async run() {
     const { args, argv } = this.parse(Deploy)
 
-    await this.handleNonInteractive(args, argv)
-
-    return
+    await this.deploy(args, argv)
   }
 
-  private async handleNonInteractive(
+  private async deploy(
     args: { [x: string]: any; contractName?: any },
     argv: string[],
   ) {
@@ -48,27 +48,43 @@ export default class Deploy extends Command {
     }
 
     const options = conf.load()
-    console.log(options)
-    console.log(args)
-    console.log(argv)
-
     const cwd = process.cwd()
     const artifactPath = join(
       cwd,
       options.artifactsDir,
       `${args.contractName}.json`,
     )
-    console.log(artifactPath)
     if (!fs.existsSync(artifactPath)) {
       this.log(chalk.red(`ABI not found at ${artifactPath}`))
       this.exit(1)
     }
 
     const buffer = fs.readFileSync(artifactPath)
-    const abi = JSON.parse(buffer.toString())
-    console.log('ABI loaded')
-    console.log(abi)
+    const artifact = JSON.parse(buffer.toString())
 
-    // TODO: After deployment, return contractAddress to stdout for piping
+    // Initialize ethers wallet
+    const provider = ethers.getDefaultProvider(getNetworkName(options.chainId))
+    let wallet = ethers.Wallet.fromMnemonic(options.mnemonic)
+    wallet = wallet.connect(provider)
+
+    // TODO: intialize ethers contract factory
+    const factory = new ethers.ContractFactory(
+      artifact['compilerOutput']['abi'],
+      artifact['compilerOutput']['evm']['bytecode'],
+      wallet,
+    )
+
+    // TODO: parse ABI for object of "type": "constructor"
+    const constructorInputs = args.slice(1)
+    // TODO: validate number of parameters
+
+    const contract = await factory.deploy(constructorInputs)
+    cli.action.start(`Deploying ${args.contractName} to ${contract.address}`)
+
+    contract.deployTransaction.wait()
+    // TODO: add loading spinner
+
+    cli.action.stop('Deployed')
+    this.log(contract.address)
   }
 }

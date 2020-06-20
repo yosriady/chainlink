@@ -7,7 +7,9 @@ import { RuntimeConfig, RuntimeConfigParser } from '../services/runtimeConfig'
 
 const NETWORKS = [
   { value: 1, name: 'mainnet' },
+  { value: 3, name: 'ropsten' },
   { value: 4, name: 'rinkeby' },
+  { value: 42, name: 'kovan' },
 ]
 
 export default class Init extends Command {
@@ -67,13 +69,13 @@ export default class Init extends Command {
       return await this.handleInteractive(args.path)
     } else {
       return this.handleNonInteractive(
+        args.path,
         flags.chainId,
         flags.mnemonic,
         flags.infuraProjectId,
         flags.gasPrice,
         flags.gasLimit,
         flags.artifactsDir,
-        args.path,
       )
     }
   }
@@ -142,13 +144,13 @@ export default class Init extends Command {
   }
 
   private handleNonInteractive(
-    chainId: number | undefined,
-    mnemonic: string | undefined,
-    infuraProjectId: string | undefined,
-    gasPrice: number | undefined,
-    gasLimit: number | undefined,
-    artifactsDir: string | undefined,
     path: string,
+    chainId?: number,
+    mnemonic?: string,
+    infuraProjectId?: string,
+    gasPrice?: number,
+    gasLimit?: number,
+    artifactsDir?: string,
   ) {
     const conf = new RuntimeConfigParser(path)
     const current = conf.get()

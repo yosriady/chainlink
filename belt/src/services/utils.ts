@@ -45,3 +45,22 @@ export function debug(fileName: string) {
 export function getJsonFile(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
+
+/**
+ * Get the network name for a given chainId
+ *
+ * @param chainId Ethereum chain ID
+ */
+export function getNetworkName(chainId: number): string {
+  const networks: { [keyof: number]: string } = {
+    1: 'mainnet',
+    3: 'ropsten',
+    4: 'rinkeby',
+    42: 'kovan',
+  }
+  if (!Object.keys(networks).includes(chainId.toString())) {
+    throw new Error('Invalid chain Id')
+  }
+
+  return networks[chainId]
+}
