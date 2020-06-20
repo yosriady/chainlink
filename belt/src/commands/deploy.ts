@@ -9,13 +9,15 @@ import { ethers } from 'ethers'
 import { RuntimeConfigParser } from '../services/runtimeConfig'
 import { getNetworkName } from '../services/utils'
 
-// const ETHERS_ARTIFACTS_DIR = 'ethers'
 const conf = new RuntimeConfigParser()
 
 export default class Deploy extends Command {
   static description = 'Deploys a chainlink smart contract'
 
-  static examples = ['belt deploy [<options>] <contractName> [<args>]']
+  static examples = [
+    'belt deploy [<options>] <contractName> [<args>]',
+    "belt deploy AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'",
+  ]
   static strict = false
 
   static flags = {
@@ -70,16 +72,31 @@ export default class Deploy extends Command {
       wallet,
     )
 
-    // TODO: parse ABI for object of "type": "constructor"
-    const constructorInputs = argv.slice(1)
-    // TODO: validate number of parameters
+    // Validate function parameter length
+    const constructorABI = abi['compilerOutput']['abi'].find(
+      (i: { type: string }) => {
+        return i.type === 'constructor'
+      },
+    )
+    const numConstructorInputs = constructorABI['inputs'].length
+    const inputs = argv.slice(1)
+    if (numConstructorInputs !== inputs.length) {
+      this.log(
+        chalk.red(
+          `Received ${inputs.length} arguments, expected ${numConstructorInputs}`,
+        ),
+      )
+      this.exit(1)
+    }
 
-    const contract = await factory.deploy(constructorInputs)
+    // Deploy contract
+    const contract = await factory.deploy(...inputs)
     cli.action.start(`Deploying ${contractName} to ${contract.address}`)
 
     contract.deployTransaction.wait()
 
     cli.action.stop('Deployed')
     this.log(contract.address)
+    return
   }
 }
