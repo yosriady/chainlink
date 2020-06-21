@@ -121,12 +121,12 @@ ARGUMENTS
   PATH  [default: .] .beltrc filepath
 
 OPTIONS
-  -c, --chainId                          Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
-  -g, --gasPrice                         Default gas price
+  -c, --chainId=chainId                  Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
+  -g, --gasPrice=gasPrice                Default gas price
   -h, --help                             show CLI help
-  -l, --gasLimit                         Default gas limit
-  -m, --mnemonic                         Mnemonic for Ethereum wallet to send transactions from
-  -p, --infuraProjectId  Infura project ID
+  -l, --gasLimit=gasLimit                Default gas limit
+  -m, --mnemonic=mnemonic                Mnemonic for Ethereum wallet to send transactions from
+  -p, --infuraProjectId=infuraProjectId  Infura project ID
 
 EXAMPLES
   belt init
@@ -138,7 +138,7 @@ Example `.beltrc` file:
 ```json
 {
     "chainId": 4,
-    "mnemonic": "person meat focus web panther man penalty gospel transfer gospel tent mail",
+    "mnemonic": "person meat focus ...",
     "infuraProjectId": "fdf38d85d15e434e9b2ca152b7b1bc6f",
     "gasPrice": 40000000000,
     "gasLimit": 8000000,
@@ -153,19 +153,21 @@ Deploys a chainlink smart contract.
 
 ```
 USAGE
-  $ belt deploy [CONTRACTNAME]
+  $ belt deploy [VERSIONEDCONTRACTNAME]
 
 ARGUMENTS
-  CONTRACTNAME  Name of the chainlink contract to deploy
+  VERSIONEDCONTRACTNAME  Version and name of the chainlink contract e.g. v0.6/FluxAggregator
 
 OPTIONS
-  -h, --help  show CLI help
+  -g, --gasPrice=gasPrice  Gas price
+  -h, --help               show CLI help
+  -l, --gasLimit=gasLimit  Gas limit
+  -n, --nonce=nonce        Nonce
+  -v, --value=value        Value
 
 EXAMPLES
-  belt deploy [<options>] <contract> [<args>]
-  belt deploy AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'
-
-  Deploying AccessControlledAggregator to 0x341869dbD1448a40aB762159264723383b3a6E48 ... Deployed in tx 0x6a47a7bb1f84f9048da11222b0a879d372a9f4ba50511a594b84a833e45eb80f
+  belt deploy [<options>] <version/contract> [<args>]
+  belt deploy v0.6/AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'
 ```
 
 ## `belt exec`
@@ -174,19 +176,25 @@ Executes a chainlink smart contract write function.
 
 ```
 USAGE
-  $ belt exec [CONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
+  $ belt exec [VERSIONEDCONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
 
 ARGUMENTS
-  CONTRACTNAME       Name of the chainlink contract
-  CONTRACTADDRESS    Address of the chainlink contract
-  FUNCTIONSIGNATURE  ABI-encoded function signature to call
+  VERSIONEDCONTRACTNAME  Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+  CONTRACTADDRESS        Address of the chainlink contract
+  FUNCTIONSIGNATURE      ABI-encoded function signature to call
 
 OPTIONS
-  -h, --help  show CLI help
+  -g, --gasPrice=gasPrice  Gas price
+  -h, --help               show CLI help
+  -l, --gasLimit=gasLimit  Gas limit
+  -n, --nonce=nonce        Nonce
+  -v, --value=value        Value
 
 EXAMPLES
-  belt exec [<options>] <contract> <address> <fsig> [<args>]
-  belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0x67b260DffCE59E890CfAe9ec733921357732f90a
+  belt exec [<options>] <<version/contract> <address> <fsig> [<args>]
+  belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD
+  belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)'
+  [0x67b260DffCE59E890CfAe9ec733921357732f90a] [0xd9e6eCFfd3Acb20f80D1BCce3d078653B4E7f87D] 1 3 600
 ```
 
 ## `belt call`
@@ -195,19 +203,22 @@ Calls a chainlink smart contract read-only function.
 
 ```
 USAGE
-  $ belt call [CONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
+  $ belt call [VERSIONEDCONTRACTNAME] [CONTRACTADDRESS] [FUNCTIONSIGNATURE]
 
 ARGUMENTS
-  CONTRACTNAME       Name of the chainlink contract
-  CONTRACTADDRESS    Address of the chainlink contract
-  FUNCTIONSIGNATURE  ABI-encoded function signature to call
+  VERSIONEDCONTRACTNAME  Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+  CONTRACTADDRESS        Address of the chainlink contract
+  FUNCTIONSIGNATURE      ABI-encoded function signature to call
 
 OPTIONS
-  -h, --help  show CLI help
+  -f, --from=from          From address
+  -h, --help               show CLI help
+  -l, --gasLimit=gasLimit  Gas limit
 
 EXAMPLES
-  belt call [<options>] <contract> <address> <fsig> [<args>]
-  belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'
+  belt call [<options>] <version/contract> <address> <fsig> [<args>]
+  belt call v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'
+  belt call v0.6/SimpleAccessControl 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'hasAccess(address,bytes)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD '0x'
 ```
 
 ## `belt help [COMMAND]`
