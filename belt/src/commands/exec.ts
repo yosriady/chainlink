@@ -16,6 +16,13 @@ import {
 
 const conf = new RuntimeConfigParser()
 
+export interface ExecOverrides {
+  gasPrice?: number
+  gasLimit?: number
+  nonce?: number
+  value?: number
+}
+
 export default class Exec extends Command {
   static description = 'Executes a chainlink smart contract write function.'
 
@@ -28,7 +35,22 @@ export default class Exec extends Command {
 
   static flags = {
     help: flags.help({ char: 'h' }),
-    // TODO: Add override flags for gas price, gas limit, nonce
+    gasPrice: flags.integer({
+      char: 'g',
+      description: 'Gas price',
+    }),
+    gasLimit: flags.integer({
+      char: 'l',
+      description: 'Gas limit',
+    }),
+    nonce: flags.integer({
+      char: 'n',
+      description: 'Nonce',
+    }),
+    value: flags.integer({
+      char: 'v',
+      description: 'Value',
+    }),
   }
 
   static args: Parser.args.IArg[] = [
@@ -48,13 +70,21 @@ export default class Exec extends Command {
   ]
 
   async run() {
-    const { args, argv } = this.parse(Exec)
+    const { args, argv, flags } = this.parse(Exec)
+
+    const overrides: ExecOverrides = {
+      gasPrice: flags.gasPrice,
+      gasLimit: flags.gasLimit,
+      nonce: flags.nonce,
+      value: flags.value,
+    }
 
     await this.execContract(
       args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
       argv,
+      overrides,
     )
   }
 
@@ -63,6 +93,7 @@ export default class Exec extends Command {
     contractAddress: string,
     functionSignature: string,
     argv: string[],
+    overrides: ExecOverrides,
   ) {
     // Check .beltrc exists
     let config
@@ -125,20 +156,19 @@ export default class Exec extends Command {
     )
 
     // Load transaction overrides
-    // TODO: pick up for flags with priority
-    // TODO: nonce
-    const gasPrice = config.gasPrice
-    const gasLimit = config.gasLimit
+    const execOverrides = {
+      gasPrice: overrides.gasPrice || config.gasPrice,
+      gasLimit: overrides.gasLimit || config.gasLimit,
+      ...(overrides.nonce && { nonce: overrides.nonce }),
+      ...(overrides.value && { value: overrides.value }),
+    }
 
     // Call contract
     try {
       cli.action.start(
         `Executing ${versionedContractName} ${functionSignature} ${parsedInputs.toString()} `,
       )
-      const tx = await contract[functionSignature](...parsedInputs, {
-        gasPrice,
-        gasLimit,
-      })
+      const tx = await contract[functionSignature](...parsedInputs, execOverrides)
       const receipt = await tx.wait() // defaults to 1 confirmation
       cli.action.stop(`Executed in tx ${receipt.transactionHash}`)
       this.log(receipt.transactionHash)

@@ -15,6 +15,11 @@ import { RuntimeConfigParser } from '../services/runtimeConfig'
 
 const conf = new RuntimeConfigParser()
 
+export interface CallOverrides {
+  gasLimit?: number
+  from?: string
+}
+
 export default class Call extends Command {
   static description = 'Calls a chainlink smart contract read-only function.'
 
@@ -27,6 +32,14 @@ export default class Call extends Command {
 
   static flags = {
     help: flags.help({ char: 'h' }),
+    from: flags.string({
+      char: 'f',
+      description: 'From address',
+    }),
+    gasLimit: flags.integer({
+      char: 'l',
+      description: 'Gas limit',
+    }),
   }
 
   static args: Parser.args.IArg[] = [
@@ -46,13 +59,19 @@ export default class Call extends Command {
   ]
 
   async run() {
-    const { args, argv } = this.parse(Call)
+    const { args, argv, flags } = this.parse(Call)
+
+    const overrides : CallOverrides = {
+      gasLimit: flags.gasLimit,
+      from: flags.from,
+    }
 
     await this.callContract(
       args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
       argv,
+      overrides,
     )
   }
 
@@ -61,6 +80,7 @@ export default class Call extends Command {
     contractAddress: string,
     functionSignature: string,
     argv: string[],
+    overrides: CallOverrides,
   ) {
     // Check .beltrc exists
     let config
@@ -126,15 +146,17 @@ export default class Call extends Command {
     )
 
     // Load call overrides
-    // TODO: pick up for flags with priority
-    // TODO: 'from'
-    const gasLimit = config.gasLimit
+    const callOverrides = {
+      gasLimit: overrides.gasLimit || config.gasLimit,
+      ...(overrides.from && { from: overrides.from }),
+    }
 
     // Call contract
     try {
-      const result = await contract[functionSignature](...parsedInputs, {
-        gasLimit,
-      })
+      const result = await contract[functionSignature](
+        ...parsedInputs,
+        callOverrides,
+      )
       this.log(result)
     } catch (e) {
       this.error(chalk.red(e))

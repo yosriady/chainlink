@@ -9,6 +9,13 @@ import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
+export interface DeployOverrides {
+  gasPrice?: number
+  gasLimit?: number
+  nonce?: number
+  value?: number
+}
+
 export default class Deploy extends Command {
   static description = 'Deploys a chainlink smart contract.'
 
@@ -20,7 +27,22 @@ export default class Deploy extends Command {
 
   static flags = {
     help: flags.help({ char: 'h' }),
-    // TODO: Add override flags for gas price, gas limit, nonce
+    gasPrice: flags.integer({
+      char: 'g',
+      description: 'Gas price',
+    }),
+    gasLimit: flags.integer({
+      char: 'l',
+      description: 'Gas limit',
+    }),
+    nonce: flags.integer({
+      char: 'n',
+      description: 'Nonce',
+    }),
+    value: flags.integer({
+      char: 'v',
+      description: 'Value',
+    }),
   }
 
   static args: Parser.args.IArg[] = [
@@ -32,12 +54,23 @@ export default class Deploy extends Command {
   ]
 
   async run() {
-    const { args, argv } = this.parse(Deploy)
+    const { args, argv, flags } = this.parse(Deploy)
 
-    await this.deployContract(args.versionedContractName, argv)
+    const overrides: DeployOverrides = {
+      gasPrice: flags.gasPrice,
+      gasLimit: flags.gasLimit,
+      nonce: flags.nonce,
+      value: flags.value,
+    }
+
+    await this.deployContract(args.versionedContractName, argv, overrides)
   }
 
-  private async deployContract(versionedContractName: string, argv: string[]) {
+  private async deployContract(
+    versionedContractName: string,
+    argv: string[],
+    overrides: DeployOverrides,
+  ) {
     // Check .beltrc exists
     let config
     try {
@@ -82,20 +115,18 @@ export default class Deploy extends Command {
     )
 
     // Load transaction overrides
-    // TODO: pick up for flags with priority
-    // TODO: 'nonce'
-    // TODO: 'value'
-    const gasPrice = config.gasPrice
-    const gasLimit = config.gasLimit
+    const deployOverrides = {
+      gasPrice: overrides.gasPrice || config.gasPrice,
+      gasLimit: overrides.gasLimit || config.gasLimit,
+      ...(overrides.nonce && { nonce: overrides.nonce }),
+      ...(overrides.value && { value: overrides.value }),
+    }
 
     // Deploy contract
     let contract: ethers.Contract
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
-      contract = await factory.deploy(...parsedInputs, {
-        gasPrice,
-        gasLimit,
-      })
+      contract = await factory.deploy(...parsedInputs, deployOverrides)
       cli.action.start(
         `Deploying ${versionedContractName} to ${contract.address} `,
       )
