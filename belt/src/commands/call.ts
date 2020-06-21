@@ -14,6 +14,7 @@ export default class Call extends Command {
   static examples = [
     'belt call [<options>] <contract> <address> <fsig> [<args>]',
     "belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'",
+    "belt call SimpleAccessControl 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'hasAccess(address,bytes)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD '0x'",
   ]
   static strict = false
 

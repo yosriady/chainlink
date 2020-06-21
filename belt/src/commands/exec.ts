@@ -14,7 +14,7 @@ export default class Exec extends Command {
 
   static examples = [
     'belt exec [<options>] <contract> <address> <fsig> [<args>]',
-    "belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0x67b260DffCE59E890CfAe9ec733921357732f90a",
+    "belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD",
   ]
   static strict = false
 
@@ -97,7 +97,7 @@ export default class Exec extends Command {
     // Call contract
     try {
       cli.action.start(
-        `Executing ${contractName} ${functionSignature} ${commandInputs.toString}`,
+        `Executing ${contractName} ${functionSignature} ${commandInputs.toString()} `,
       )
       // TODO: add overrides e.g. gasprice, gaslimit
       const tx = await contract[functionSignature](...commandInputs, {})
