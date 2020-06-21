@@ -73,7 +73,7 @@ export function getNetworkName(chainId: number): string {
 /**
  * Finds and loads the ABI of a chainlink smart contract.
  *
- * @param config .beltrc RuntimeConfig
+ * @param config RuntimeConfig from .beltrc
  * @param versionedContractName e.g. 'v0.6/AccessControlledAggregator'
  */
 export function findABI(
@@ -90,9 +90,13 @@ export function findABI(
   return { found, abi }
 }
 
-// Converts array strings e.g. '[0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD]' to actual JS arrays
-export function parseArrayInputs(commandInputs: string[]) {
-  const parsedInputs = commandInputs.map((i: string) => {
+/**
+ * Converts array strings to real JS arrays.
+ *
+ * @param input array string e.g. '[0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD]'
+ */
+export function parseArrayInputs(input: string[]) {
+  const result = input.map((i: string) => {
     if (i === '[]') return []
     const isArrayString = i.charAt(0) === '[' && i.charAt(i.length - 1) === ']'
     if (isArrayString) {
@@ -102,22 +106,34 @@ export function parseArrayInputs(commandInputs: string[]) {
     }
     return i
   })
-  return parsedInputs
+  return result
 }
 
+/**
+ * Returns true if a function signature is properly formatted.
+ *
+ * @param functionSignature 'hasAccess(address,bytes)'
+ */
 export function isValidSignature(functionSignature: string) {
   const leftParenIdx = functionSignature.indexOf('(')
   const rightParenIdx = functionSignature.indexOf(')')
   const validParens =
     leftParenIdx > -1 && rightParenIdx > -1 && rightParenIdx > leftParenIdx
-  return validParens
+  const hasWhitespace = /\s/.test(functionSignature)
+  return validParens && !hasWhitespace
 }
 
-export function getFunctionName(functionSignature: string) {
-  return functionSignature.substr(0, functionSignature.indexOf('('))
-}
-
-export function getFunctionABI(abi: any, functionName: string) {
+/**
+ * Returns the ABI of a contract function.
+ *
+ * @param abi Solidity ABI
+ * @param functionSignature 'hasAccess(address,bytes)'
+ */
+export function getFunctionABI(abi: any, functionSignature: string) {
+  const functionName = functionSignature.substr(
+    0,
+    functionSignature.indexOf('('),
+  )
   const functionABI = abi['compilerOutput']['abi'].find(
     (i: { type: string; name: string }) => {
       return i.type === 'function' && i.name === functionName
@@ -126,6 +142,11 @@ export function getFunctionABI(abi: any, functionName: string) {
   return functionABI
 }
 
+/**
+ * Returns the ABI of a contract constructor.
+ *
+ * @param abi Solidity ABI
+ */
 export function getConstructorABI(abi: any) {
   const constructorABI = abi['compilerOutput']['abi'].find(
     (i: { type: string }) => {
@@ -135,6 +156,11 @@ export function getConstructorABI(abi: any) {
   return constructorABI
 }
 
+/**
+ * Initializes an Ethers infura provider.
+ *
+ * @param config RuntimeConfig from .beltrc
+ */
 export function initProvider(
   config: RuntimeConfig,
 ): ethers.providers.InfuraProvider {
@@ -147,6 +173,11 @@ export function initProvider(
   return provider
 }
 
+/**
+ * Initializes an Ethers wallet.
+ *
+ * @param config RuntimeConfig from .beltrc
+ */
 export function initWallet(config: RuntimeConfig): ethers.Wallet {
   const provider = initProvider(config)
   let wallet = ethers.Wallet.fromMnemonic(config.mnemonic)

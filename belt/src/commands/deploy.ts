@@ -26,7 +26,7 @@ export default class Deploy extends Command {
 
   static examples = [
     'belt deploy [<options>] <version/contract> [<args>]',
-    "belt deploy v0.6/AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'",
+    'belt deploy v0.6/AccessControlledAggregator 0x01be23585060835e02b77ef475b0cc51aa1e0709 160000000000000000 300 1 1000000000 18 LINK/USD',
   ]
   static strict = false
 
@@ -60,6 +60,7 @@ export default class Deploy extends Command {
 
   async run() {
     const { args, argv, flags } = this.parse(Deploy)
+    const inputs = argv.slice(Object.keys(Deploy.args).length)
 
     // Check .beltrc exists
     let config: RuntimeConfig
@@ -83,15 +84,23 @@ export default class Deploy extends Command {
     await this.deployContract(
       wallet,
       args.versionedContractName,
-      argv,
+      inputs,
       overrides,
     )
   }
 
+  /**
+   * Deploys a smart contract.
+   *
+   * @param wallet Ethers wallet (signer + provider)
+   * @param versionedContractName Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+   * @param inputs Array of function inputs
+   * @param overrides Contract call overrides e.g. gasLimit
+   */
   private async deployContract(
     wallet: ethers.Wallet,
     versionedContractName: string,
-    argv: string[],
+    inputs: string[],
     overrides: DeployOverrides,
   ) {
     // Find contract ABI
@@ -107,17 +116,16 @@ export default class Deploy extends Command {
     // Validate command inputs against constructor inputs
     const constructorABI = getConstructorABI(abi)
     const numConstructorInputs = constructorABI['inputs'].length
-    const commandInputs = argv.slice(Object.keys(Deploy.args).length)
-    if (numConstructorInputs !== commandInputs.length) {
+    if (numConstructorInputs !== inputs.length) {
       this.error(
         chalk.red(
-          `Received ${commandInputs.length} arguments, constructor expected ${numConstructorInputs}`,
+          `Received ${inputs.length} arguments, constructor expected ${numConstructorInputs}`,
         ),
       )
     }
 
     // Transforms string arrays to arrays
-    const parsedInputs = parseArrayInputs(commandInputs)
+    const parsedInputs = parseArrayInputs(inputs)
 
     // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(

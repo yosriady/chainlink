@@ -10,7 +10,6 @@ import {
   parseArrayInputs,
   isValidSignature,
   getFunctionABI,
-  getFunctionName,
   initWallet,
 } from '../services/utils'
 
@@ -29,7 +28,7 @@ export default class Exec extends Command {
   static examples = [
     'belt exec [<options>] <<version/contract> <address> <fsig> [<args>]',
     "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD",
-    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)' [0x67b260DffCE59E890CfAe9ec733921357732f90a] [0xd9e6eCFfd3Acb20f80D1BCce3d078653B4E7f87D] 1 3 600",
+    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)' [0x67b260DffCE59E890CfAe9ec733921357732f90a] [0xd9e6eCFfd3Acb20f80D1BCce3d078653B4E7f87D] 1 100 600",
   ]
   static strict = false
 
@@ -65,12 +64,13 @@ export default class Exec extends Command {
     },
     {
       name: 'functionSignature',
-      description: 'ABI-encoded function signature to call',
+      description: 'Solidity function signature e.g. baz(uint32,bool)',
     },
   ]
 
   async run() {
     const { args, argv, flags } = this.parse(Exec)
+    const inputs = argv.slice(Object.keys(Exec.args).length)
 
     // Check .beltrc exists
     let config: RuntimeConfig
@@ -96,17 +96,27 @@ export default class Exec extends Command {
       args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
-      argv,
+      inputs,
       overrides,
     )
   }
 
+  /**
+   * Executes a smart contract write function.
+   *
+   * @param wallet Ethers wallet (signer + provider)
+   * @param versionedContractName Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+   * @param contractAddress
+   * @param functionSignature Solidity function signature e.g. baz(uint32,bool)
+   * @param inputs Array of function inputs
+   * @param overrides Contract call overrides e.g. gasLimit
+   */
   private async execContract(
     wallet: ethers.Wallet,
     versionedContractName: string,
     contractAddress: string,
     functionSignature: string,
-    argv: string[],
+    inputs: string[],
     overrides: ExecOverrides,
   ) {
     // Find contract ABI
@@ -127,8 +137,7 @@ export default class Exec extends Command {
         ),
       )
     }
-    const functionName = getFunctionName(functionSignature)
-    const functionABI = getFunctionABI(abi, functionName)
+    const functionABI = getFunctionABI(abi, functionSignature)
     if (!functionABI) {
       this.error(
         chalk.red(
@@ -139,17 +148,16 @@ export default class Exec extends Command {
 
     // Validate command inputs against function inputs
     const numFunctionInputs = functionABI['inputs'].length
-    const commandInputs = argv.slice(Object.keys(Exec.args).length)
-    if (numFunctionInputs !== commandInputs.length) {
+    if (numFunctionInputs !== inputs.length) {
       this.error(
         chalk.red(
-          `Received ${commandInputs.length} arguments, constructor expected ${numFunctionInputs}`,
+          `Received ${inputs.length} arguments, constructor expected ${numFunctionInputs}`,
         ),
       )
     }
 
     // Transforms string arrays to arrays
-    const parsedInputs = parseArrayInputs(commandInputs)
+    const parsedInputs = parseArrayInputs(inputs)
 
     // Initialize contract
     const contract = new ethers.Contract(

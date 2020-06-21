@@ -169,7 +169,7 @@ OPTIONS
 
 EXAMPLES
   belt deploy [<options>] <version/contract> [<args>]
-  belt deploy v0.6/AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'
+  belt deploy v0.6/AccessControlledAggregator 0x01be23585060835e02b77ef475b0cc51aa1e0709 160000000000000000 300 1 1000000000 18 LINK/USD
 ```
 
 ## `belt inspect`

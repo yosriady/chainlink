@@ -9,7 +9,6 @@ import {
   parseArrayInputs,
   isValidSignature,
   getFunctionABI,
-  getFunctionName,
 } from '../services/utils'
 import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
 
@@ -54,12 +53,13 @@ export default class Call extends Command {
     },
     {
       name: 'functionSignature',
-      description: 'ABI-encoded function signature to call',
+      description: 'Solidity function signature e.g. baz(uint32,bool)',
     },
   ]
 
   async run() {
     const { args, argv, flags } = this.parse(Call)
+    const inputs = argv.slice(Object.keys(Call.args).length)
 
     // Check .beltrc exists
     let config: RuntimeConfig
@@ -83,17 +83,27 @@ export default class Call extends Command {
       args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
-      argv,
+      inputs,
       overrides,
     )
   }
 
+  /**
+   * Calls a read-only smart contract function.
+   *
+   * @param provider Ethers infura provider
+   * @param versionedContractName Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+   * @param contractAddress
+   * @param functionSignature Solidity function signature e.g. baz(uint32,bool)
+   * @param inputs Array of function inputs
+   * @param overrides Contract call overrides e.g. gasLimit
+   */
   private async callContract(
     provider: ethers.providers.InfuraProvider,
     versionedContractName: string,
     contractAddress: string,
     functionSignature: string,
-    argv: string[],
+    inputs: string[],
     overrides: CallOverrides,
   ) {
     // Find contract ABI
@@ -114,8 +124,7 @@ export default class Call extends Command {
         ),
       )
     }
-    const functionName = getFunctionName(functionSignature)
-    const functionABI = getFunctionABI(abi, functionName)
+    const functionABI = getFunctionABI(abi, functionSignature)
     if (!functionABI) {
       this.error(
         chalk.red(
@@ -126,17 +135,16 @@ export default class Call extends Command {
 
     // Validate command inputs against function inputs
     const numFunctionInputs = functionABI['inputs'].length
-    const commandInputs = argv.slice(Object.keys(Call.args).length)
-    if (numFunctionInputs !== commandInputs.length) {
+    if (numFunctionInputs !== inputs.length) {
       this.error(
         chalk.red(
-          `Received ${commandInputs.length} arguments, ${functionSignature} expected ${numFunctionInputs}`,
+          `Received ${inputs.length} arguments, ${functionSignature} expected ${numFunctionInputs}`,
         ),
       )
     }
 
     // Transforms string arrays to arrays
-    const parsedInputs = parseArrayInputs(commandInputs)
+    const parsedInputs = parseArrayInputs(inputs)
 
     // Initialize contract
     const contract = new ethers.Contract(

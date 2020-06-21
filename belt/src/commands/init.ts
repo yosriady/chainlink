@@ -56,8 +56,8 @@ export default class Init extends Command {
 
   async run() {
     const { flags, args } = this.parse(Init)
-    this.log('Initializing .beltrc')
 
+    this.log('Initializing .beltrc')
     const noFlags = Object.keys(flags).length === 0
     if (noFlags) {
       return await this.handleInteractive(args.path)
@@ -73,9 +73,14 @@ export default class Init extends Command {
     }
   }
 
+  /**
+   * Prompts the user to update their .beltrc.
+   *
+   * @param path path to .beltrc file
+   */
   private async handleInteractive(path: string) {
     const conf = new RuntimeConfigParser(path)
-    const current = conf.get()
+    const current = conf.loadWithDefaults()
 
     const {
       chainId,
@@ -128,6 +133,17 @@ export default class Init extends Command {
     this.log(chalk.greenBright(`.beltrc saved in ${conf.filepath()}`))
   }
 
+  /**
+   * Updates the .beltrc runtime configuration.
+   * Only values which are passed in are used to update.
+   *
+   * @param path path to .beltrc file
+   * @param chainId
+   * @param mnemonic
+   * @param infuraProjectId
+   * @param gasPrice default gas price
+   * @param gasLimit default gas limit
+   */
   private handleNonInteractive(
     path: string,
     chainId?: number,
@@ -137,7 +153,7 @@ export default class Init extends Command {
     gasLimit?: number,
   ) {
     const conf = new RuntimeConfigParser(path)
-    const current = conf.get()
+    const current = conf.loadWithDefaults()
 
     const config = {
       chainId: chainId || current.chainId,

@@ -20,7 +20,7 @@ const DEFAULTS: RuntimeConfig = {
 }
 
 /**
- * Helper for reading from and writing RuntimeConfig to .beltrc
+ * Helper for reading from and writing to .beltrc
  */
 export class RuntimeConfigParser {
   path: string
@@ -29,20 +29,12 @@ export class RuntimeConfigParser {
     this.path = path
   }
 
-  exists(): boolean {
+  private exists(): boolean {
     return fs.existsSync(this.filepath())
   }
 
   filepath(): string {
     return join(this.path, RUNTIME_CONFIG)
-  }
-
-  get(): RuntimeConfig {
-    let result = DEFAULTS
-    if (this.exists()) {
-      result = this.load()
-    }
-    return result
   }
 
   load(): RuntimeConfig {
@@ -54,6 +46,13 @@ export class RuntimeConfigParser {
       throw Error(`Could not load .beltrc at ${this.path}`)
     }
     return result
+  }
+
+  loadWithDefaults(): RuntimeConfig {
+    if (this.exists()) {
+      return this.load()
+    }
+    return DEFAULTS
   }
 
   set(config: RuntimeConfig) {

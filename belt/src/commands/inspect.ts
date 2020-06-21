@@ -37,13 +37,14 @@ export default class Inspect extends Command {
       )
     }
 
+    // Parse ABI for function APIs
     const devdoc = abi['compilerOutput']['devdoc']
     const abiMethods = Object.keys(devdoc['methods'])
-
     const data = abiMethods.map(m => {
       return { name: m, details: devdoc['methods'][m]['details'] || '' }
     })
 
+    // Render table
     cli.table(
       data,
       {
