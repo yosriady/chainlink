@@ -3,7 +3,14 @@ import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
-import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
+import {
+  getNetworkName,
+  findABI,
+  parseArrayInputs,
+  isValidSignature,
+  getFunctionABI,
+  getFunctionName,
+} from '../services/utils'
 import { RuntimeConfigParser } from '../services/runtimeConfig'
 
 const conf = new RuntimeConfigParser()
@@ -81,10 +88,17 @@ export default class Call extends Command {
         ),
       )
     }
-
-    // Validate command inputs against function inputs
     const functionName = getFunctionName(functionSignature)
     const functionABI = getFunctionABI(abi, functionName)
+    if (!functionABI) {
+      this.error(
+        chalk.red(
+          `function ${functionSignature} not found in ${versionedContractName}`,
+        ),
+      )
+    }
+
+    // Validate command inputs against function inputs
     const numFunctionInputs = functionABI['inputs'].length
     const commandInputs = argv.slice(Object.keys(Call.args).length)
     if (numFunctionInputs !== commandInputs.length) {
@@ -126,25 +140,4 @@ export default class Call extends Command {
       this.error(chalk.red(e))
     }
   }
-}
-
-function isValidSignature(functionSignature: string) {
-  const leftParenIdx = functionSignature.indexOf('(')
-  const rightParenIdx = functionSignature.indexOf(')')
-  const validParens =
-    leftParenIdx > -1 && rightParenIdx > -1 && rightParenIdx > leftParenIdx
-  return validParens
-}
-
-function getFunctionName(functionSignature: string) {
-  return functionSignature.substr(0, functionSignature.indexOf('('))
-}
-
-function getFunctionABI(abi: any, functionName: string) {
-  const functionABI = abi['compilerOutput']['abi'].find(
-    (i: { type: string; name: string }) => {
-      return i.type === 'function' && i.name === functionName
-    },
-  )
-  return functionABI
 }

@@ -91,9 +91,9 @@ export function findABI(
 // Converts array strings e.g. '[0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD]' to actual JS arrays
 export function parseArrayInputs(commandInputs: string[]) {
   const parsedInputs = commandInputs.map((i: string) => {
+    if (i === '[]') return []
     const isArrayString = i.charAt(0) === '[' && i.charAt(i.length - 1) === ']'
     if (isArrayString) {
-      console.log(`${i} is array string`)
       const trimmed = i.slice(1, -1)
       const arr = trimmed.split(',')
       return arr
@@ -101,4 +101,25 @@ export function parseArrayInputs(commandInputs: string[]) {
     return i
   })
   return parsedInputs
+}
+
+export function isValidSignature(functionSignature: string) {
+  const leftParenIdx = functionSignature.indexOf('(')
+  const rightParenIdx = functionSignature.indexOf(')')
+  const validParens =
+    leftParenIdx > -1 && rightParenIdx > -1 && rightParenIdx > leftParenIdx
+  return validParens
+}
+
+export function getFunctionName(functionSignature: string) {
+  return functionSignature.substr(0, functionSignature.indexOf('('))
+}
+
+export function getFunctionABI(abi: any, functionName: string) {
+  const functionABI = abi['compilerOutput']['abi'].find(
+    (i: { type: string; name: string }) => {
+      return i.type === 'function' && i.name === functionName
+    },
+  )
+  return functionABI
 }

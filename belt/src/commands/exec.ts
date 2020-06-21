@@ -5,7 +5,14 @@ import cli from 'cli-ux'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
 import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
-import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
+import {
+  getNetworkName,
+  findABI,
+  parseArrayInputs,
+  isValidSignature,
+  getFunctionABI,
+  getFunctionName,
+} from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
@@ -15,7 +22,7 @@ export default class Exec extends Command {
   static examples = [
     'belt exec [<options>] <<version/contract> <address> <fsig> [<args>]',
     "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD",
-    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)' [0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD] [0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD] 1 3 600",
+    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)' [0x67b260DffCE59E890CfAe9ec733921357732f90a] [0xd9e6eCFfd3Acb20f80D1BCce3d078653B4E7f87D] 1 3 600",
   ]
   static strict = false
 
@@ -75,9 +82,25 @@ export default class Exec extends Command {
       )
     }
 
-    // Validate command inputs against function inputs
+    // Validate function signature
+    if (!isValidSignature(functionSignature)) {
+      this.error(
+        chalk.red(
+          "Invalid function signature - Example: belt call ... 'hasAccess(address,bytes)'",
+        ),
+      )
+    }
     const functionName = getFunctionName(functionSignature)
     const functionABI = getFunctionABI(abi, functionName)
+    if (!functionABI) {
+      this.error(
+        chalk.red(
+          `function ${functionSignature} not found in ${versionedContractName}`,
+        ),
+      )
+    }
+
+    // Validate command inputs against function inputs
     const numFunctionInputs = functionABI['inputs'].length
     const commandInputs = argv.slice(Object.keys(Exec.args).length)
     if (numFunctionInputs !== commandInputs.length) {
@@ -123,19 +146,6 @@ export default class Exec extends Command {
       this.error(chalk.red(e))
     }
   }
-}
-
-function getFunctionName(functionSignature: string) {
-  return functionSignature.substr(0, functionSignature.indexOf('('))
-}
-
-function getFunctionABI(abi: any, functionName: string) {
-  const functionABI = abi['compilerOutput']['abi'].find(
-    (i: { type: string; name: string }) => {
-      return i.type === 'function' && i.name === functionName
-    },
-  )
-  return functionABI
 }
 
 function initSigner(config: RuntimeConfig): ethers.Wallet {
