@@ -11,7 +11,7 @@ import {
   getFunctionABI,
   getFunctionName,
 } from '../services/utils'
-import { RuntimeConfigParser } from '../services/runtimeConfig'
+import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
 
 const conf = new RuntimeConfigParser()
 
@@ -61,12 +61,28 @@ export default class Call extends Command {
   async run() {
     const { args, argv, flags } = this.parse(Call)
 
-    const overrides : CallOverrides = {
-      gasLimit: flags.gasLimit,
-      from: flags.from,
+    // Check .beltrc exists
+    let config: RuntimeConfig
+    try {
+      config = conf.load()
+    } catch (e) {
+      this.error(chalk.red(e))
     }
 
+    // Load call overrides
+    const overrides: CallOverrides = {
+      gasLimit: flags.gasLimit || config.gasLimit,
+      ...(flags.from && { from: flags.from }),
+    }
+
+    // Initialize ethers provider
+    const provider = new ethers.providers.InfuraProvider(
+      getNetworkName(config.chainId),
+      { projectId: config.infuraProjectId },
+    )
+
     await this.callContract(
+      provider,
       args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
@@ -76,20 +92,13 @@ export default class Call extends Command {
   }
 
   private async callContract(
+    provider: ethers.providers.InfuraProvider,
     versionedContractName: string,
     contractAddress: string,
     functionSignature: string,
     argv: string[],
     overrides: CallOverrides,
   ) {
-    // Check .beltrc exists
-    let config
-    try {
-      config = conf.load()
-    } catch (e) {
-      this.error(chalk.red(e))
-    }
-
     // Find contract ABI
     const { found, abi } = findABI(versionedContractName)
     if (!found) {
@@ -132,12 +141,6 @@ export default class Call extends Command {
     // Transforms string arrays to arrays
     const parsedInputs = parseArrayInputs(commandInputs)
 
-    // Initialize ethers provider
-    const provider = new ethers.providers.InfuraProvider(
-      getNetworkName(config.chainId),
-      { projectId: config.infuraProjectId },
-    )
-
     // Initialize contract
     const contract = new ethers.Contract(
       contractAddress,
@@ -145,17 +148,11 @@ export default class Call extends Command {
       provider,
     )
 
-    // Load call overrides
-    const callOverrides = {
-      gasLimit: overrides.gasLimit || config.gasLimit,
-      ...(overrides.from && { from: overrides.from }),
-    }
-
     // Call contract
     try {
       const result = await contract[functionSignature](
         ...parsedInputs,
-        callOverrides,
+        overrides,
       )
       this.log(result)
     } catch (e) {
