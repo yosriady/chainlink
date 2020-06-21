@@ -3,7 +3,9 @@ import { join } from 'path'
 import d from 'debug'
 import { readFileSync } from 'fs'
 import { ls } from 'shelljs'
+import { ethers } from 'ethers'
 import * as config from './config'
+import { RuntimeConfig } from './runtimeConfig'
 
 /**
  * Get contract versions and their directories
@@ -122,4 +124,32 @@ export function getFunctionABI(abi: any, functionName: string) {
     },
   )
   return functionABI
+}
+
+export function getConstructorABI(abi: any) {
+  const constructorABI = abi['compilerOutput']['abi'].find(
+    (i: { type: string }) => {
+      return i.type === 'constructor'
+    },
+  )
+  return constructorABI
+}
+
+export function initProvider(
+  config: RuntimeConfig,
+): ethers.providers.InfuraProvider {
+  const provider = new ethers.providers.InfuraProvider(
+    getNetworkName(config.chainId),
+    {
+      ...(config.infuraProjectId && { projectId: config.infuraProjectId }),
+    },
+  )
+  return provider
+}
+
+export function initWallet(config: RuntimeConfig): ethers.Wallet {
+  const provider = initProvider(config)
+  let wallet = ethers.Wallet.fromMnemonic(config.mnemonic)
+  wallet = wallet.connect(provider)
+  return wallet
 }

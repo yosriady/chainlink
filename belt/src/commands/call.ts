@@ -4,7 +4,7 @@ import * as Parser from '@oclif/parser'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
 import {
-  getNetworkName,
+  initProvider,
   findABI,
   parseArrayInputs,
   isValidSignature,
@@ -76,10 +76,7 @@ export default class Call extends Command {
     }
 
     // Initialize ethers provider
-    const provider = new ethers.providers.InfuraProvider(
-      getNetworkName(config.chainId),
-      { projectId: config.infuraProjectId },
-    )
+    const provider = initProvider(config)
 
     await this.callContract(
       provider,

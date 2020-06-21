@@ -5,7 +5,12 @@ import cli from 'cli-ux'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
 import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
-import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
+import {
+  findABI,
+  parseArrayInputs,
+  initWallet,
+  getConstructorABI,
+} from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
@@ -56,29 +61,39 @@ export default class Deploy extends Command {
   async run() {
     const { args, argv, flags } = this.parse(Deploy)
 
-    const overrides: DeployOverrides = {
-      gasPrice: flags.gasPrice,
-      gasLimit: flags.gasLimit,
-      nonce: flags.nonce,
-      value: flags.value,
-    }
-
-    await this.deployContract(args.versionedContractName, argv, overrides)
-  }
-
-  private async deployContract(
-    versionedContractName: string,
-    argv: string[],
-    overrides: DeployOverrides,
-  ) {
     // Check .beltrc exists
-    let config
+    let config: RuntimeConfig
     try {
       config = conf.load()
     } catch (e) {
       this.error(chalk.red(e))
     }
 
+    // Load transaction overrides
+    const overrides: DeployOverrides = {
+      gasPrice: flags.gasPrice || config.gasPrice,
+      gasLimit: flags.gasLimit || config.gasLimit,
+      ...(flags.nonce && { nonce: flags.nonce }),
+      ...(flags.value && { value: flags.value }),
+    }
+
+    // Initialize ethers wallet (signer + provider)
+    const wallet = initWallet(config)
+
+    await this.deployContract(
+      wallet,
+      args.versionedContractName,
+      argv,
+      overrides,
+    )
+  }
+
+  private async deployContract(
+    wallet: ethers.Wallet,
+    versionedContractName: string,
+    argv: string[],
+    overrides: DeployOverrides,
+  ) {
     // Find contract ABI
     const { found, abi } = findABI(versionedContractName)
     if (!found) {
@@ -104,9 +119,6 @@ export default class Deploy extends Command {
     // Transforms string arrays to arrays
     const parsedInputs = parseArrayInputs(commandInputs)
 
-    // Initialize ethers wallet (signer + provider)
-    const wallet = initSigner(config)
-
     // Intialize ethers contract factory
     const factory = new ethers.ContractFactory(
       abi['compilerOutput']['abi'],
@@ -114,19 +126,10 @@ export default class Deploy extends Command {
       wallet,
     )
 
-    // Load transaction overrides
-    const deployOverrides = {
-      gasPrice: overrides.gasPrice || config.gasPrice,
-      gasLimit: overrides.gasLimit || config.gasLimit,
-      ...(overrides.nonce && { nonce: overrides.nonce }),
-      ...(overrides.value && { value: overrides.value }),
-    }
-
     // Deploy contract
     let contract: ethers.Contract
     try {
-      // TODO: add overrides e.g. gasprice, gaslimit
-      contract = await factory.deploy(...parsedInputs, deployOverrides)
+      contract = await factory.deploy(...parsedInputs, overrides)
       cli.action.start(
         `Deploying ${versionedContractName} to ${contract.address} `,
       )
@@ -138,23 +141,4 @@ export default class Deploy extends Command {
     }
     return
   }
-}
-
-function initSigner(config: RuntimeConfig): ethers.Wallet {
-  const provider = new ethers.providers.InfuraProvider(
-    getNetworkName(config.chainId),
-    { projectId: config.infuraProjectId },
-  )
-  let wallet = ethers.Wallet.fromMnemonic(config.mnemonic)
-  wallet = wallet.connect(provider)
-  return wallet
-}
-
-function getConstructorABI(abi: any) {
-  const constructorABI = abi['compilerOutput']['abi'].find(
-    (i: { type: string }) => {
-      return i.type === 'constructor'
-    },
-  )
-  return constructorABI
 }
