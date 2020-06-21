@@ -101,18 +101,26 @@ export default class Exec extends Command {
       signer,
     )
 
+    // Load transaction overrides
+    // TODO: pick up for flags with priority
+    // TODO: nonce
+    const gasPrice = config.gasPrice
+    const gasLimit = config.gasLimit
+
     // Call contract
     try {
       cli.action.start(
         `Executing ${versionedContractName} ${functionSignature} ${parsedInputs.toString()} `,
       )
-      // TODO: add overrides e.g. gasprice, gaslimit
-      const tx = await contract[functionSignature](...parsedInputs, {})
+      const tx = await contract[functionSignature](...parsedInputs, {
+        gasPrice,
+        gasLimit,
+      })
       const receipt = await tx.wait() // defaults to 1 confirmation
       cli.action.stop(`Executed in tx ${receipt.transactionHash}`)
       this.log(receipt.transactionHash)
     } catch (e) {
-      this.error(e)
+      this.error(chalk.red(e))
     }
   }
 }

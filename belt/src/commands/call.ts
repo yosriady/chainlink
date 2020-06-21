@@ -111,12 +111,19 @@ export default class Call extends Command {
       provider,
     )
 
+    // Load call overrides
+    // TODO: pick up for flags with priority
+    // TODO: 'from'
+    const gasLimit = config.gasLimit
+
     // Call contract
     try {
-      const result = await contract[functionSignature](...parsedInputs)
+      const result = await contract[functionSignature](...parsedInputs, {
+        gasLimit,
+      })
       this.log(result)
     } catch (e) {
-      this.error(e)
+      this.error(chalk.red(e))
     }
   }
 }

@@ -81,11 +81,21 @@ export default class Deploy extends Command {
       wallet,
     )
 
+    // Load transaction overrides
+    // TODO: pick up for flags with priority
+    // TODO: 'nonce'
+    // TODO: 'value'
+    const gasPrice = config.gasPrice
+    const gasLimit = config.gasLimit
+
     // Deploy contract
     let contract: ethers.Contract
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
-      contract = await factory.deploy(...parsedInputs, {})
+      contract = await factory.deploy(...parsedInputs, {
+        gasPrice,
+        gasLimit,
+      })
       cli.action.start(
         `Deploying ${versionedContractName} to ${contract.address} `,
       )
@@ -93,7 +103,7 @@ export default class Deploy extends Command {
       cli.action.stop(`Deployed in tx ${receipt.transactionHash}`)
       this.log(contract.address)
     } catch (e) {
-      this.error(e)
+      this.error(chalk.red(e))
     }
     return
   }
