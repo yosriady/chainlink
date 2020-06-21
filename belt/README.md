@@ -33,6 +33,7 @@ $ cd evm-contracts/
 $ belt init
 
 $ belt deploy ...
+$ belt inspect ...
 $ belt exec ...
 $ belt call ...
 ```
@@ -45,6 +46,7 @@ $ belt call ...
 * [`belt compile [COMPILER]`](#belt-compile-compiler)
 * [`belt init`](#belt-init)
 * [`belt deploy`](#belt-deploy)
+* [`belt inspect`](#belt-inspect)
 * [`belt exec`](#belt-exec)
 * [`belt call`](#belt-call)
 * [`belt help [COMMAND]`](#belt-help-command)
@@ -168,6 +170,43 @@ OPTIONS
 EXAMPLES
   belt deploy [<options>] <version/contract> [<args>]
   belt deploy v0.6/AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'
+```
+
+## `belt inspect`
+
+Inspects the API of a chainlink smart contract.
+
+```
+USAGE
+  $ belt inspect [VERSIONEDCONTRACTNAME]
+
+ARGUMENTS
+  VERSIONEDCONTRACTNAME  Version and name of the chainlink contract e.g. v0.6/FluxAggregator
+
+OPTIONS
+  -x, --extended          show extra columns
+  --columns=columns       only show provided columns (comma-separated)
+  --csv                   output is csv format [alias: --output=csv]
+  --filter=filter         filter property by partial string matching, ex: name=foo
+  --no-header             hide table header from output
+  --no-truncate           do not truncate output to fit screen
+  --output=csv|json|yaml  output in a more machine friendly format
+  --sort=sort             property to sort by (prepend '-' for descending)
+
+EXAMPLES
+  belt inspect [<options>] <version/contract>
+  belt inspect v0.6/AccessControlledAggregator
+```
+
+Example output:
+
+```
+Function Name                                           Function Description
+acceptAdmin(address)
+acceptOwnership()                                       Allows an ownership transfer to be completed by the recipient.
+addAccess(address)
+addOracles(address[],address[],uint32,uint32,uint32)
+getAdmin(address)
 ```
 
 ## `belt exec`
