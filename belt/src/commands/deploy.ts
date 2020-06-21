@@ -5,7 +5,7 @@ import cli from 'cli-ux'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
 import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
-import { getNetworkName, findABI } from '../services/utils'
+import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
@@ -13,8 +13,8 @@ export default class Deploy extends Command {
   static description = 'Deploys a chainlink smart contract.'
 
   static examples = [
-    'belt deploy [<options>] <contract> [<args>]',
-    "belt deploy AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'",
+    'belt deploy [<options>] <version/contract> [<args>]',
+    "belt deploy v0.6/AccessControlledAggregator '0x01be23585060835e02b77ef475b0cc51aa1e0709' 160000000000000000 300 1 1000000000 18 'LINK/USD'",
   ]
   static strict = false
 
@@ -25,18 +25,19 @@ export default class Deploy extends Command {
 
   static args: Parser.args.IArg[] = [
     {
-      name: 'contractName',
-      description: 'Name of the chainlink contract to deploy',
+      name: 'versionedContractName',
+      description:
+        'Version and name of the chainlink contract e.g. v0.6/FluxAggregator',
     },
   ]
 
   async run() {
     const { args, argv } = this.parse(Deploy)
 
-    await this.deployContract(args.contractName, argv)
+    await this.deployContract(args.versionedContractName, argv)
   }
 
-  private async deployContract(contractName: string, argv: string[]) {
+  private async deployContract(versionedContractName: string, argv: string[]) {
     // Check .beltrc exists
     let config
     try {
@@ -46,10 +47,12 @@ export default class Deploy extends Command {
     }
 
     // Find contract ABI
-    const { found, abi } = findABI(config, contractName)
+    const { found, abi } = findABI(versionedContractName)
     if (!found) {
       this.error(
-        chalk.red(`${contractName} ABI not found at - Run 'belt compile'`),
+        chalk.red(
+          `${versionedContractName} ABI not found - Run 'belt compile'`,
+        ),
       )
     }
 
@@ -65,6 +68,9 @@ export default class Deploy extends Command {
       )
     }
 
+    // Transforms string arrays to arrays
+    const parsedInputs = parseArrayInputs(commandInputs)
+
     // Initialize ethers wallet (signer + provider)
     const wallet = initSigner(config)
 
@@ -79,8 +85,10 @@ export default class Deploy extends Command {
     let contract: ethers.Contract
     try {
       // TODO: add overrides e.g. gasprice, gaslimit
-      contract = await factory.deploy(...commandInputs, {})
-      cli.action.start(`Deploying ${contractName} to ${contract.address} `)
+      contract = await factory.deploy(...parsedInputs, {})
+      cli.action.start(
+        `Deploying ${versionedContractName} to ${contract.address} `,
+      )
       const receipt = await contract.deployTransaction.wait() // defaults to 1 confirmation
       cli.action.stop(`Deployed in tx ${receipt.transactionHash}`)
       this.log(contract.address)

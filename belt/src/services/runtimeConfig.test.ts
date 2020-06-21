@@ -12,7 +12,6 @@ describe('RuntimeConfig', () => {
       infuraProjectId: 'fdf38d85d15e434e9b2ca152b7b1bc6f',
       gasPrice: 40000000000, // 40 gwei
       gasLimit: 8000000,
-      artifactsDir: 'abi/v0.6',
     }
   }
 

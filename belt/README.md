@@ -122,7 +122,6 @@ ARGUMENTS
 
 OPTIONS
   -c, --chainId                          Ethereum network to send transactions to e.g. mainnet (1), rinkeby (4)
-  -d, --artifactsDir                     ABI directory
   -g, --gasPrice                         Default gas price
   -h, --help                             show CLI help
   -l, --gasLimit                         Default gas limit
@@ -143,7 +142,6 @@ Example `.beltrc` file:
     "infuraProjectId": "fdf38d85d15e434e9b2ca152b7b1bc6f",
     "gasPrice": 40000000000,
     "gasLimit": 8000000,
-    "artifactsDir": "abi/v0.6"
 }
 ```
 

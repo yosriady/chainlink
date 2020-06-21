@@ -4,7 +4,6 @@ import d from 'debug'
 import { readFileSync } from 'fs'
 import { ls } from 'shelljs'
 import * as config from './config'
-import { RuntimeConfig } from './runtimeConfig'
 
 /**
  * Get contract versions and their directories
@@ -73,14 +72,13 @@ export function getNetworkName(chainId: number): string {
  * Finds and loads the ABI of a chainlink smart contract.
  *
  * @param config .beltrc RuntimeConfig
- * @param contractName e.g. 'AccessControlledAggregator'
+ * @param versionedContractName e.g. 'v0.6/AccessControlledAggregator'
  */
 export function findABI(
-  config: RuntimeConfig,
-  contractName: string,
+  versionedContractName: string,
 ): { found: boolean; abi: any } {
   const cwd = process.cwd()
-  const artifactPath = join(cwd, config.artifactsDir, `${contractName}.json`)
+  const artifactPath = join(cwd, 'abi', `${versionedContractName}.json`)
 
   const found = fs.existsSync(artifactPath)
   if (!found) return { found, abi: null }
@@ -88,4 +86,19 @@ export function findABI(
   const buffer = fs.readFileSync(artifactPath)
   const abi = JSON.parse(buffer.toString())
   return { found, abi }
+}
+
+// Converts array strings e.g. '[0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD]' to actual JS arrays
+export function parseArrayInputs(commandInputs: string[]) {
+  const parsedInputs = commandInputs.map((i: string) => {
+    const isArrayString = i.charAt(0) === '[' && i.charAt(i.length - 1) === ']'
+    if (isArrayString) {
+      console.log(`${i} is array string`)
+      const trimmed = i.slice(1, -1)
+      const arr = trimmed.split(',')
+      return arr
+    }
+    return i
+  })
+  return parsedInputs
 }

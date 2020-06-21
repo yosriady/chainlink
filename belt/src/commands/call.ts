@@ -3,7 +3,7 @@ import { Command, flags } from '@oclif/command'
 import * as Parser from '@oclif/parser'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
-import { getNetworkName, findABI } from '../services/utils'
+import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
 import { RuntimeConfigParser } from '../services/runtimeConfig'
 
 const conf = new RuntimeConfigParser()
@@ -12,9 +12,9 @@ export default class Call extends Command {
   static description = 'Calls a chainlink smart contract read-only function.'
 
   static examples = [
-    'belt call [<options>] <contract> <address> <fsig> [<args>]',
-    "belt call AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'",
-    "belt call SimpleAccessControl 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'hasAccess(address,bytes)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD '0x'",
+    'belt call [<options>] <version/contract> <address> <fsig> [<args>]',
+    "belt call v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'description()'",
+    "belt call v0.6/SimpleAccessControl 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'hasAccess(address,bytes)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD '0x'",
   ]
   static strict = false
 
@@ -24,8 +24,9 @@ export default class Call extends Command {
 
   static args: Parser.args.IArg[] = [
     {
-      name: 'contractName',
-      description: 'Name of the chainlink contract',
+      name: 'versionedContractName',
+      description:
+        'Version and name of the chainlink contract e.g. v0.6/FluxAggregator',
     },
     {
       name: 'contractAddress',
@@ -41,7 +42,7 @@ export default class Call extends Command {
     const { args, argv } = this.parse(Call)
 
     await this.callContract(
-      args.contractName,
+      args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
       argv,
@@ -49,7 +50,7 @@ export default class Call extends Command {
   }
 
   private async callContract(
-    contractName: string,
+    versionedContractName: string,
     contractAddress: string,
     functionSignature: string,
     argv: string[],
@@ -63,17 +64,21 @@ export default class Call extends Command {
     }
 
     // Find contract ABI
-    const { found, abi } = findABI(config, contractName)
+    const { found, abi } = findABI(versionedContractName)
     if (!found) {
       this.error(
-        chalk.red(`${contractName} ABI not found at - Run 'belt compile'`),
+        chalk.red(
+          `${versionedContractName} ABI not found - Run 'belt compile'`,
+        ),
       )
     }
 
     // Validate function signature
     if (!isValidSignature(functionSignature)) {
       this.error(
-        chalk.red("Invalid function signature - belt call ... 'decimals()'"),
+        chalk.red(
+          "Invalid function signature - Example: belt call ... 'hasAccess(address,bytes)'",
+        ),
       )
     }
 
@@ -90,6 +95,9 @@ export default class Call extends Command {
       )
     }
 
+    // Transforms string arrays to arrays
+    const parsedInputs = parseArrayInputs(commandInputs)
+
     // Initialize ethers provider
     const provider = new ethers.providers.InfuraProvider(
       getNetworkName(config.chainId),
@@ -105,7 +113,7 @@ export default class Call extends Command {
 
     // Call contract
     try {
-      const result = await contract[functionSignature](...commandInputs)
+      const result = await contract[functionSignature](...parsedInputs)
       this.log(result)
     } catch (e) {
       this.error(e)

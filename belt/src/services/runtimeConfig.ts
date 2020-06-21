@@ -8,7 +8,6 @@ export interface RuntimeConfig {
   infuraProjectId: string
   gasPrice: number
   gasLimit: number
-  artifactsDir: string
 }
 
 const RUNTIME_CONFIG = '.beltrc'
@@ -18,7 +17,6 @@ const DEFAULTS: RuntimeConfig = {
   infuraProjectId: '',
   gasPrice: 40000000000, // 40 gwei
   gasLimit: 8000000,
-  artifactsDir: 'abi/v0.6',
 }
 
 /**

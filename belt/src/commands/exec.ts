@@ -5,7 +5,7 @@ import cli from 'cli-ux'
 import chalk from 'chalk'
 import { ethers } from 'ethers'
 import { RuntimeConfigParser, RuntimeConfig } from '../services/runtimeConfig'
-import { getNetworkName, findABI } from '../services/utils'
+import { getNetworkName, findABI, parseArrayInputs } from '../services/utils'
 
 const conf = new RuntimeConfigParser()
 
@@ -13,8 +13,9 @@ export default class Exec extends Command {
   static description = 'Executes a chainlink smart contract write function.'
 
   static examples = [
-    'belt exec [<options>] <contract> <address> <fsig> [<args>]',
-    "belt exec AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD",
+    'belt exec [<options>] <<version/contract> <address> <fsig> [<args>]',
+    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addAccess(address)' 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD",
+    "belt exec v0.6/AccessControlledAggregator 0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD 'addOracles(address[],address[],uint32,uint32,uint32)' [0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD] [0xe47D8b2CC42F07cdf05ca791bab47bc47Ed8B5CD] 1 3 600",
   ]
   static strict = false
 
@@ -25,8 +26,9 @@ export default class Exec extends Command {
 
   static args: Parser.args.IArg[] = [
     {
-      name: 'contractName',
-      description: 'Name of the chainlink contract',
+      name: 'versionedContractName',
+      description:
+        'Version and name of the chainlink contract e.g. v0.6/FluxAggregator',
     },
     {
       name: 'contractAddress',
@@ -42,7 +44,7 @@ export default class Exec extends Command {
     const { args, argv } = this.parse(Exec)
 
     await this.execContract(
-      args.contractName,
+      args.versionedContractName,
       args.contractAddress,
       args.functionSignature,
       argv,
@@ -50,7 +52,7 @@ export default class Exec extends Command {
   }
 
   private async execContract(
-    contractName: string,
+    versionedContractName: string,
     contractAddress: string,
     functionSignature: string,
     argv: string[],
@@ -64,10 +66,12 @@ export default class Exec extends Command {
     }
 
     // Find contract ABI
-    const { found, abi } = findABI(config, contractName)
+    const { found, abi } = findABI(versionedContractName)
     if (!found) {
       this.error(
-        chalk.red(`${contractName} ABI not found at - Run 'belt compile'`),
+        chalk.red(
+          `${versionedContractName} ABI not found - Run 'belt compile'`,
+        ),
       )
     }
 
@@ -84,6 +88,9 @@ export default class Exec extends Command {
       )
     }
 
+    // Transforms string arrays to arrays
+    const parsedInputs = parseArrayInputs(commandInputs)
+
     // Initialize ethers wallet (signer + provider)
     const signer = initSigner(config)
 
@@ -97,10 +104,10 @@ export default class Exec extends Command {
     // Call contract
     try {
       cli.action.start(
-        `Executing ${contractName} ${functionSignature} ${commandInputs.toString()} `,
+        `Executing ${versionedContractName} ${functionSignature} ${parsedInputs.toString()} `,
       )
       // TODO: add overrides e.g. gasprice, gaslimit
-      const tx = await contract[functionSignature](...commandInputs, {})
+      const tx = await contract[functionSignature](...parsedInputs, {})
       const receipt = await tx.wait() // defaults to 1 confirmation
       cli.action.stop(`Executed in tx ${receipt.transactionHash}`)
       this.log(receipt.transactionHash)
