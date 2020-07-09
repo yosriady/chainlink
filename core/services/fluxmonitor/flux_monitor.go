@@ -25,9 +25,9 @@ import (
 	"github.com/tevino/abool"
 )
 
-//go:generate mockery -name Service -output ../../internal/mocks/ -case=underscore
-//go:generate mockery -name DeviationCheckerFactory -output ../../internal/mocks/ -case=underscore
-//go:generate mockery -name DeviationChecker -output ../../internal/mocks/ -case=underscore
+//go:generate mockery --name Service --output ../../internal/mocks/ --case=underscore
+//go:generate mockery --name DeviationCheckerFactory --output ../../internal/mocks/ --case=underscore
+//go:generate mockery --name DeviationChecker --output ../../internal/mocks/ --case=underscore
 
 type RunManager interface {
 	Create(
@@ -77,7 +77,7 @@ func New(
 		return &concreteFluxMonitor{disabled: true}
 	}
 
-	logBroadcaster := eth.NewLogBroadcaster(store)
+	logBroadcaster := eth.NewLogBroadcaster(store.TxManager, store.ORM, store.Config.BlockBackfillDepth())
 	return &concreteFluxMonitor{
 		store:          store,
 		runManager:     runManager,
@@ -194,6 +194,7 @@ func (fm *concreteFluxMonitor) AddJob(job models.JobSpec) error {
 	if job.ID == nil {
 		err := errors.New("received job with nil ID")
 		logger.Error(err)
+		fm.store.UpsertErrorFor(job.ID, "Unable to add job - job has nil ID")
 		return err
 	}
 
@@ -213,6 +214,7 @@ func (fm *concreteFluxMonitor) AddJob(job models.JobSpec) error {
 			timeout,
 		)
 		if err != nil {
+			fm.store.UpsertErrorFor(job.ID, "Unable to create deviation checker")
 			return errors.Wrap(err, "factory unable to create checker")
 		}
 		validCheckers = append(validCheckers, checker)
@@ -710,7 +712,14 @@ func (p *PollingDeviationChecker) respondToNewRoundLog(log contracts.LogNewRound
 		return
 	}
 
-	err = p.createJobRun(polledAnswer, logRoundID)
+	var payment assets.Link
+	if roundState.PaymentAmount == nil {
+		logger.Error("roundState.PaymentAmount shouldn't be nil")
+	} else {
+		payment = assets.Link(*roundState.PaymentAmount)
+	}
+
+	err = p.createJobRun(polledAnswer, logRoundID, &payment)
 	if err != nil {
 		logger.Errorw(fmt.Sprintf("unable to create job run: %v", err), p.loggerFieldsForNewRound(log)...)
 		return
@@ -790,6 +799,7 @@ func (p *PollingDeviationChecker) pollIfEligible(thresholds DeviationThresholds)
 	roundState, err := p.roundState(0)
 	if err != nil {
 		logger.Errorw(fmt.Sprintf("unable to determine eligibility to submit from FluxAggregator contract: %v", err), loggerFields...)
+		p.store.UpsertErrorFor(p.JobID(), "Unable to call roundState method on provided contract. Check contract address.")
 		return
 	}
 	loggerFields = append(loggerFields, "reportableRound", roundState.ReportableRoundID)
@@ -798,6 +808,7 @@ func (p *PollingDeviationChecker) pollIfEligible(thresholds DeviationThresholds)
 	roundStats, err := p.store.FindOrCreateFluxMonitorRoundStats(p.initr.Address, roundState.ReportableRoundID)
 	if err != nil {
 		logger.Errorw(fmt.Sprintf("error fetching Flux Monitor round stats from DB: %v", err), loggerFields...)
+		p.store.UpsertErrorFor(p.JobID(), "Error fetching Flux Monitor round stats from DB")
 		return
 	}
 
@@ -816,6 +827,7 @@ func (p *PollingDeviationChecker) pollIfEligible(thresholds DeviationThresholds)
 	polledAnswer, err := p.fetcher.Fetch()
 	if err != nil {
 		logger.Errorw(fmt.Sprintf("can't fetch answer: %v", err), loggerFields...)
+		p.store.UpsertErrorFor(p.JobID(), "Error polling")
 		return
 	}
 
@@ -838,7 +850,14 @@ func (p *PollingDeviationChecker) pollIfEligible(thresholds DeviationThresholds)
 		logger.Infow("starting first round", loggerFields...)
 	}
 
-	err = p.createJobRun(polledAnswer, roundState.ReportableRoundID)
+	var payment assets.Link
+	if roundState.PaymentAmount == nil {
+		logger.Error("roundState.PaymentAmount shouldn't be nil")
+	} else {
+		payment = assets.Link(*roundState.PaymentAmount)
+	}
+
+	err = p.createJobRun(polledAnswer, roundState.ReportableRoundID, &payment)
 	if err != nil {
 		logger.Errorw(fmt.Sprintf("can't create job run: %v", err), loggerFields...)
 		return
@@ -920,7 +939,11 @@ type jobRunRequest struct {
 	DataPrefix       string          `json:"dataPrefix"`
 }
 
-func (p *PollingDeviationChecker) createJobRun(polledAnswer decimal.Decimal, roundID uint32) error {
+func (p *PollingDeviationChecker) createJobRun(
+	polledAnswer decimal.Decimal,
+	roundID uint32,
+	paymentAmount *assets.Link,
+) error {
 	methodID, err := p.fluxAggregator.GetMethodID("submit")
 	if err != nil {
 		return err
@@ -942,6 +965,7 @@ func (p *PollingDeviationChecker) createJobRun(polledAnswer decimal.Decimal, rou
 		return errors.Wrap(err, fmt.Sprintf("unable to start chainlink run with payload %s", payload))
 	}
 	runRequest := models.NewRunRequest(runData)
+	runRequest.Payment = paymentAmount
 
 	_, err = p.runManager.Create(p.initr.JobSpecID, &p.initr, nil, runRequest)
 	if err != nil {

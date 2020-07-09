@@ -12,10 +12,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink/core/assets"
 	"github.com/smartcontractkit/chainlink/core/cmd"
-	"github.com/smartcontractkit/chainlink/core/eth"
 	"github.com/smartcontractkit/chainlink/core/internal/cltest"
 	"github.com/smartcontractkit/chainlink/core/internal/mocks"
-	ethsvc "github.com/smartcontractkit/chainlink/core/services/eth"
+	"github.com/smartcontractkit/chainlink/core/services/eth"
 	"github.com/smartcontractkit/chainlink/core/services/eth/contracts"
 	"github.com/smartcontractkit/chainlink/core/services/fluxmonitor"
 	"github.com/smartcontractkit/chainlink/core/store"
@@ -85,8 +84,8 @@ func TestConcreteFluxMonitor_AddJobRemoveJob(t *testing.T) {
 
 	txm := new(mocks.TxManager)
 	store.TxManager = txm
-	txm.On("GetLatestBlock").Return(eth.Block{Number: hexutil.Uint64(123)}, nil)
-	txm.On("GetLogs", mock.Anything).Return([]eth.Log{}, nil)
+	txm.On("GetLatestBlock").Return(models.Block{Number: hexutil.Uint64(123)}, nil)
+	txm.On("GetLogs", mock.Anything).Return([]models.Log{}, nil)
 
 	t.Run("starts and stops DeviationCheckers when jobs are added and removed", func(t *testing.T) {
 		job := cltest.NewJobWithFluxMonitorInitiator()
@@ -324,6 +323,48 @@ func TestPollingDeviationChecker_PollIfEligible(t *testing.T) {
 	}
 }
 
+// If the roundState method is unable to communicate with the contract (possibly due to
+// incorrect address) then the pollIfEligible method should create a JobSpecErr record
+func TestPollingDeviationChecker_PollIfEligible_Creates_JobSpecErr(t *testing.T) {
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+	nodeAddr := ensureAccount(t, store)
+
+	rm := new(mocks.RunManager)
+	fetcher := new(mocks.Fetcher)
+	fluxAggregator := new(mocks.FluxAggregator)
+
+	job := cltest.NewJobWithFluxMonitorInitiator()
+	initr := job.Initiators[0]
+	roundState := contracts.FluxAggregatorRoundState{}
+	require.Len(t, job.Errors, 0)
+	err := store.CreateJob(&job)
+	require.NoError(t, err)
+
+	fluxAggregator.On("RoundState", nodeAddr, mock.Anything).Return(roundState, errors.New("err")).Once()
+	checker, err := fluxmonitor.NewPollingDeviationChecker(
+		store,
+		fluxAggregator,
+		initr,
+		nil,
+		rm,
+		fetcher,
+		func() {},
+	)
+	require.NoError(t, err)
+	checker.OnConnect()
+
+	checker.ExportedPollIfEligible(1, 1)
+
+	job, err = store.FindJobWithErrors(job.ID)
+	require.NoError(t, err)
+	require.Len(t, job.Errors, 1)
+
+	fluxAggregator.AssertExpectations(t)
+	fetcher.AssertExpectations(t)
+	rm.AssertExpectations(t)
+}
+
 func TestPollingDeviationChecker_BuffersLogs(t *testing.T) {
 	store, cleanup := cltest.NewStore(t)
 	defer cleanup()
@@ -372,7 +413,7 @@ func TestPollingDeviationChecker_BuffersLogs(t *testing.T) {
 	chSafeToFillQueue := make(chan struct{})
 
 	fluxAggregator := new(mocks.FluxAggregator)
-	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, ethsvc.UnsubscribeFunc(func() {}), nil)
+	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, eth.UnsubscribeFunc(func() {}), nil)
 	fluxAggregator.On("GetMethodID", "submit").Return(submitSelector, nil)
 	fluxAggregator.On("RoundState", nodeAddr, uint32(1)).
 		Return(makeRoundStateForRoundID(1), nil).
@@ -467,7 +508,7 @@ func TestPollingDeviationChecker_TriggerIdleTimeThreshold(t *testing.T) {
 			const fetchedAnswer = 100
 			answerBigInt := big.NewInt(fetchedAnswer * int64(math.Pow10(int(initr.InitiatorParams.Precision))))
 
-			fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, ethsvc.UnsubscribeFunc(func() {}), nil)
+			fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, eth.UnsubscribeFunc(func() {}), nil)
 
 			idleDurationOccured := make(chan struct{}, 3)
 
@@ -551,7 +592,7 @@ func TestPollingDeviationChecker_RoundTimeoutCausesPoll_timesOutAtZero(t *testin
 
 	const fetchedAnswer = 100
 	answerBigInt := big.NewInt(fetchedAnswer * int64(math.Pow10(int(initr.InitiatorParams.Precision))))
-	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, ethsvc.UnsubscribeFunc(func() {}), nil)
+	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, eth.UnsubscribeFunc(func() {}), nil)
 	fluxAggregator.On("RoundState", nodeAddr, uint32(0)).Return(contracts.FluxAggregatorRoundState{
 		ReportableRoundID: 1,
 		EligibleToSubmit:  false,
@@ -601,7 +642,7 @@ func TestPollingDeviationChecker_RoundTimeoutCausesPoll_timesOutNotZero(t *testi
 	const fetchedAnswer = 100
 	answerBigInt := big.NewInt(fetchedAnswer * int64(math.Pow10(int(initr.InitiatorParams.Precision))))
 
-	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, ethsvc.UnsubscribeFunc(func() {}), nil)
+	fluxAggregator.On("SubscribeToLogs", mock.Anything).Return(true, eth.UnsubscribeFunc(func() {}), nil)
 
 	startedAt := uint64(time.Now().Unix())
 	timeout := uint64(3)

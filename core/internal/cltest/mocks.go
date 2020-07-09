@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/smartcontractkit/chainlink/core/cmd"
-	"github.com/smartcontractkit/chainlink/core/eth"
 	"github.com/smartcontractkit/chainlink/core/logger"
 	"github.com/smartcontractkit/chainlink/core/services/chainlink"
+	"github.com/smartcontractkit/chainlink/core/services/eth"
 	"github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/models"
 	"github.com/smartcontractkit/chainlink/core/store/orm"
@@ -71,16 +71,31 @@ func MockEthOnStore(t testing.TB, s *store.Store, flags ...string) *EthMock {
 
 // SimpleGethWrapper offers an easy way to mock the eth client
 type SimpleGethWrapper struct {
-	c eth.GethClient
+	g eth.GethClient
+	r eth.RPCClient
 }
 
-func NewSimpleGethWrapper(c eth.GethClient) *SimpleGethWrapper {
-	wrapper := SimpleGethWrapper{c: c}
+func NewSimpleGethWrapper(clients ...interface{}) *SimpleGethWrapper {
+	wrapper := SimpleGethWrapper{}
+	for _, client := range clients {
+		switch c := client.(type) {
+		case eth.GethClient:
+			wrapper.g = c
+		case eth.RPCClient:
+			wrapper.r = c
+		default:
+			panic("unrecognised client type")
+		}
+	}
 	return &wrapper
 }
 
 func (wrapper *SimpleGethWrapper) GethClient(f func(c eth.GethClient) error) error {
-	return f(wrapper.c)
+	return f(wrapper.g)
+}
+
+func (wrapper *SimpleGethWrapper) RPCClient(f func(r eth.RPCClient) error) error {
+	return f(wrapper.r)
 }
 
 // EthMock is a mock ethereum client
@@ -97,6 +112,11 @@ type EthMock struct {
 
 // GethClient is a noop, solely needed to conform to GethClientWrapper interface
 func (mock *EthMock) GethClient(f func(c eth.GethClient) error) error {
+	return nil
+}
+
+// RPCClient is a noop, solely needed to conform to GethClientWrapper interface
+func (mock *EthMock) RPCClient(f func(c eth.RPCClient) error) error {
 	return nil
 }
 
@@ -288,7 +308,7 @@ func (mock *EthMock) RegisterSubscription(name string, channels ...interface{}) 
 func channelFromSubscriptionName(name string) interface{} {
 	switch name {
 	case "logs":
-		return make(chan eth.Log)
+		return make(chan models.Log)
 	case "newHeads":
 		return make(chan gethTypes.Header)
 	default:
@@ -308,7 +328,7 @@ func (mock *EthMock) Subscribe(
 		if sub.name == args[0] {
 			mock.Subscriptions = append(mock.Subscriptions[:i], mock.Subscriptions[i+1:]...)
 			switch channel.(type) {
-			case chan<- eth.Log:
+			case chan<- models.Log:
 				fwdLogs(channel, sub.channel)
 			case chan<- gethTypes.Header:
 				fwdHeaders(channel, sub.channel)
@@ -324,7 +344,7 @@ func (mock *EthMock) Subscribe(
 	} else if args[0] == "logs" && !mock.logsCalled {
 		mock.logsCalled = true
 		return &MockSubscription{
-			channel: make(chan eth.Log),
+			channel: make(chan models.Log),
 			Errors:  make(chan error),
 		}, nil
 	} else if args[0] == "newHeads" {
@@ -348,8 +368,8 @@ func (mock *EthMock) RegisterNewHead(blockNumber int64) chan gethTypes.Header {
 }
 
 func fwdLogs(actual, mock interface{}) {
-	logChan := actual.(chan<- eth.Log)
-	mockChan := mock.(chan eth.Log)
+	logChan := actual.(chan<- models.Log)
+	mockChan := mock.(chan models.Log)
 	go func() {
 		for e := range mockChan {
 			logChan <- e
@@ -396,8 +416,8 @@ func (mes *MockSubscription) Unsubscribe() {
 	switch mes.channel.(type) {
 	case chan struct{}:
 		close(mes.channel.(chan struct{}))
-	case chan eth.Log:
-		close(mes.channel.(chan eth.Log))
+	case chan models.Log:
+		close(mes.channel.(chan models.Log))
 	case chan gethTypes.Header:
 		close(mes.channel.(chan gethTypes.Header))
 	default:

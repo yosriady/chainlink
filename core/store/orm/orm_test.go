@@ -1579,7 +1579,7 @@ func TestORM_Heads_Chain(t *testing.T) {
 		}
 		require.NotEqual(t, competingHead1.Hash, h.Hash)
 		require.NotEqual(t, competingHead2.Hash, h.Hash)
-		h = h.Parent
+		h = *h.Parent
 		count++
 	}
 	assert.Equal(t, 8, count)
@@ -1593,7 +1593,7 @@ func TestORM_Heads_Chain(t *testing.T) {
 		if h.Parent == nil {
 			break
 		}
-		h = h.Parent
+		h = *h.Parent
 		count++
 	}
 	assert.Equal(t, 2, count)
@@ -1608,10 +1608,9 @@ func TestORM_Heads_Chain(t *testing.T) {
 	assert.Equal(t, baseOfForkHash, head.Parent.Parent.Hash)
 	assert.NotNil(t, head.Parent.Parent.Parent) // etc...
 
-	// Returns nil if hash has no matches
-	h, err = store.Chain(cltest.NewHash(), 12)
-	require.NoError(t, err)
-	require.Nil(t, h)
+	// Returns error if hash has no matches
+	_, err = store.Chain(cltest.NewHash(), 12)
+	require.Error(t, err)
 }
 
 func TestORM_Heads_IdempotentInsertHead(t *testing.T) {
@@ -1719,5 +1718,226 @@ func TestORM_EthTaskRunTx(t *testing.T) {
 		// But the second insert did not change the gas limit
 		assert.Equal(t, firstGasLimit, etrt.EthTx.GasLimit)
 	})
+}
 
+func TestORM_FindJobWithErrorsPreloadsJobSpecErrors(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	job1 := cltest.NewJob()
+	require.NoError(t, store.CreateJob(&job1))
+	job2 := cltest.NewJob()
+	require.NoError(t, store.CreateJob(&job2))
+
+	description1, description2 := "description 1", "description 2"
+
+	store.UpsertErrorFor(job1.ID, description1)
+	store.UpsertErrorFor(job1.ID, description2)
+
+	job1, err := store.FindJobWithErrors(job1.ID)
+	require.NoError(t, err)
+	job2, err = store.FindJobWithErrors(job2.ID)
+	require.NoError(t, err)
+
+	assert.Len(t, job1.Errors, 2)
+	assert.Len(t, job2.Errors, 0)
+
+	assert.Equal(t, job1.Errors[0].Description, description1)
+	assert.Equal(t, job1.Errors[1].Description, description2)
+}
+
+func TestORM_UpsertErrorFor_Happy(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	job1 := cltest.NewJob()
+	job2 := cltest.NewJob()
+	require.NoError(t, store.CreateJob(&job1))
+	require.NoError(t, store.CreateJob(&job2))
+
+	description1, description2 := "description 1", "description 2"
+
+	store.UpsertErrorFor(job1.ID, description1)
+
+	tests := []struct {
+		jobID               *models.ID
+		description         string
+		expectedOccurrences uint
+	}{
+		{
+			job1.ID,
+			description1,
+			2, // duplicate
+		},
+		{
+			job1.ID,
+			description2,
+			1,
+		},
+		{
+			job2.ID,
+			description1,
+			1,
+		},
+		{
+			job2.ID,
+			description2,
+			1,
+		},
+	}
+
+	for _, tt := range tests {
+		test := tt
+		testName := fmt.Sprintf(`Create JobSpecError with ID %v and description "%s"`, test.jobID, test.description)
+		t.Run(testName, func(t *testing.T) {
+			store.UpsertErrorFor(test.jobID, test.description)
+			jse, err := store.FindJobSpecError(test.jobID, test.description)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedOccurrences, jse.Occurrences)
+		})
+	}
+}
+
+func TestORM_UpsertErrorFor_Error(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	job := cltest.NewJob()
+	require.NoError(t, store.CreateJob(&job))
+	description := "description"
+	store.UpsertErrorFor(job.ID, description)
+
+	tests := []struct {
+		name        string
+		jobID       *models.ID
+		description string
+	}{
+		{
+			"missing job",
+			models.NewID(),
+			description,
+		},
+		{
+			"missing description",
+			job.ID,
+			"",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			store.UpsertErrorFor(test.jobID, test.description)
+		})
+	}
+}
+
+func TestORM_FindOrCreateFluxMonitorRoundStats(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	address := cltest.NewAddress()
+	var roundID uint32 = 1
+
+	fmrs, err := store.FindOrCreateFluxMonitorRoundStats(address, roundID)
+	require.NoError(t, err)
+	require.Equal(t, roundID, fmrs.RoundID)
+	require.Equal(t, address, fmrs.Aggregator)
+
+	count, err := store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	fmrs, err = store.FindOrCreateFluxMonitorRoundStats(address, roundID)
+	require.NoError(t, err)
+	require.Equal(t, roundID, fmrs.RoundID)
+	require.Equal(t, address, fmrs.Aggregator)
+
+	count, err = store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+}
+
+func TestORM_DeleteFluxMonitorRoundsBackThrough(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	address := cltest.NewAddress()
+
+	for round := uint32(0); round < 10; round++ {
+		_, err := store.FindOrCreateFluxMonitorRoundStats(address, round)
+		require.NoError(t, err)
+	}
+
+	count, err := store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 10, count)
+
+	err = store.DeleteFluxMonitorRoundsBackThrough(cltest.NewAddress(), 5)
+	require.NoError(t, err)
+
+	count, err = store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 10, count)
+
+	err = store.DeleteFluxMonitorRoundsBackThrough(address, 5)
+	require.NoError(t, err)
+
+	count, err = store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 5, count)
+}
+
+func TestORM_MostRecentFluxMonitorRoundID(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	address := cltest.NewAddress()
+
+	for round := uint32(0); round < 10; round++ {
+		_, err := store.FindOrCreateFluxMonitorRoundStats(address, round)
+		require.NoError(t, err)
+	}
+
+	count, err := store.ORM.CountOf(&models.FluxMonitorRoundStats{})
+	require.NoError(t, err)
+	require.Equal(t, 10, count)
+
+	roundID, err := store.MostRecentFluxMonitorRoundID(cltest.NewAddress())
+	require.Error(t, err)
+	require.Equal(t, uint32(0), roundID)
+
+	roundID, err = store.MostRecentFluxMonitorRoundID(address)
+	require.NoError(t, err)
+	require.Equal(t, uint32(9), roundID)
+}
+
+func TestORM_IncrFluxMonitorRoundSubmissions(t *testing.T) {
+	t.Parallel()
+
+	store, cleanup := cltest.NewStore(t)
+	defer cleanup()
+
+	address := cltest.NewAddress()
+	var roundID uint32 = 1
+
+	for expectedCount := uint64(1); expectedCount < 4; expectedCount++ {
+		err := store.IncrFluxMonitorRoundSubmissions(address, roundID)
+		require.NoError(t, err)
+		fmrs, err := store.FindOrCreateFluxMonitorRoundStats(address, roundID)
+		require.NoError(t, err)
+		require.Equal(t, expectedCount, fmrs.NumSubmissions)
+	}
 }

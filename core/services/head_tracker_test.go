@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"sync/atomic"
@@ -11,7 +12,9 @@ import (
 	"github.com/smartcontractkit/chainlink/core/services"
 	strpkg "github.com/smartcontractkit/chainlink/core/store"
 	"github.com/smartcontractkit/chainlink/core/store/models"
+	"github.com/smartcontractkit/chainlink/core/utils"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -328,4 +331,341 @@ func TestHeadTracker_SwitchesToLongestChain(t *testing.T) {
 	}
 
 	checker.AssertExpectations(t)
+}
+
+func TestHeadTracker_GetChainWithBackfill(t *testing.T) {
+	t.Parallel()
+
+	// Heads are arranged as follows:
+	// headN indicates an unpersisted ethereum header
+	// hN indicates a persisted head record
+	//
+	// (1)->(H0)
+	//
+	//       (14Orphaned)-+
+	//                    +->(13)->(12)->(11)->(H10)->(9)->(H8)
+	// (15)->(14)---------+
+
+	head0 := services.RawHead{
+		Number:     utils.Uint64ToHex(uint64(0)),
+		ParentHash: gethCommon.BigToHash(big.NewInt(0)).Hex(),
+		Hash:       cltest.NewHash().Hex(),
+		Timestamp:  utils.Uint64ToHex(uint64(42)),
+	}
+
+	h1 := *cltest.Head(1)
+	h1.ParentHash = gethCommon.HexToHash(head0.Hash)
+
+	head8 := services.RawHead{
+		Number:     utils.Uint64ToHex(uint64(8)),
+		ParentHash: cltest.NewHash().Hex(),
+		Hash:       cltest.NewHash().Hex(),
+		Timestamp:  utils.Uint64ToHex(uint64(42)),
+	}
+
+	h9 := *cltest.Head(9)
+	h9.ParentHash = gethCommon.HexToHash(head8.Hash)
+
+	head10 := services.RawHead{
+		Number:     utils.Uint64ToHex(uint64(10)),
+		ParentHash: h9.Hash.Hex(),
+		Hash:       cltest.NewHash().Hex(),
+		Timestamp:  utils.Uint64ToHex(uint64(42)),
+	}
+
+	h11 := *cltest.Head(11)
+	h11.ParentHash = gethCommon.HexToHash(head10.Hash)
+
+	h12 := *cltest.Head(12)
+	h12.ParentHash = h11.Hash
+
+	h13 := *cltest.Head(13)
+	h13.ParentHash = h12.Hash
+
+	h14Orphaned := *cltest.Head(14)
+	h14Orphaned.ParentHash = h13.Hash
+
+	h14 := *cltest.Head(14)
+	h14.ParentHash = h13.Hash
+
+	h15 := *cltest.Head(15)
+	h15.ParentHash = h14.Hash
+
+	heads := []models.Head{
+		h9,
+		h11,
+		h12,
+		h13,
+		h14Orphaned,
+		h14,
+		h15,
+	}
+
+	ctx := context.Background()
+
+	t.Run("returns chain if all the heads are in database", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		h, err := ht.GetChainWithBackfill(ctx, h12, 2)
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(12), h.Number)
+		require.NotNil(t, h.Parent)
+		assert.Equal(t, int64(11), h.Parent.Number)
+		require.Nil(t, h.Parent.Parent)
+	})
+
+	t.Run("fetches a missing head", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		rpcClient := new(mocks.RPCClient)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(rpcClient)
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0xa" // 10
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head10
+		}).Once()
+
+		h, err := ht.GetChainWithBackfill(ctx, h12, 3)
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(12), h.Number)
+		require.NotNil(t, h.Parent)
+		assert.Equal(t, int64(11), h.Parent.Number)
+		require.NotNil(t, h.Parent)
+		assert.Equal(t, int64(10), h.Parent.Parent.Number)
+		require.Nil(t, h.Parent.Parent.Parent)
+
+		writtenHead, err := store.HeadByHash(gethCommon.HexToHash(head10.Hash))
+		require.NoError(t, err)
+		assert.Equal(t, int64(10), writtenHead.Number)
+
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("fetches only heads that are missing", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		rpcClient := new(mocks.RPCClient)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(rpcClient)
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0xa" // 10
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head10
+		}).Once()
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0x8" // 8
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head8
+		}).Once()
+
+		// Needs to be 8 because there are 8 heads in chain (15,14,13,12,11,10,9,8)
+		h, err := ht.GetChainWithBackfill(ctx, h15, 8)
+		require.NoError(t, err)
+
+		require.Equal(t, uint32(8), h.ChainLength())
+		earliestInChain := h.EarliestInChain()
+		assert.Equal(t, cltest.MustHexToUint64(t, head8.Number), uint64(earliestInChain.Number))
+		assert.Equal(t, head8.Hash, earliestInChain.Hash.Hex())
+
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("returns error if first head is not in database", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		h16 := *cltest.Head(16)
+		h16.ParentHash = h15.Hash
+
+		_, err := ht.GetChainWithBackfill(ctx, h16, 3)
+		require.Contains(t, err.Error(), "record not found")
+	})
+
+	t.Run("does not backfill if chain length is already greater than or equal to depth", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		h, err := ht.GetChainWithBackfill(ctx, h15, 3)
+		require.NoError(t, err)
+		require.Equal(t, uint32(3), h.ChainLength())
+
+		h, err = ht.GetChainWithBackfill(ctx, h15, 5)
+		require.NoError(t, err)
+		require.Equal(t, uint32(5), h.ChainLength())
+	})
+
+	t.Run("only backfills to height 0 if chain length would otherwise cause it to try and fetch a negative head", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+
+		rpcClient := new(mocks.RPCClient)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(rpcClient)
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		require.NoError(t, store.IdempotentInsertHead(h1))
+
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0x0" // 0
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head0
+		}).Once()
+
+		h, err := ht.GetChainWithBackfill(ctx, h1, 400)
+		require.NoError(t, err)
+		require.Equal(t, uint32(2), h.ChainLength())
+		require.Equal(t, int64(0), h.EarliestInChain().Number)
+
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("abandons backfill and returns whatever we have if the eth node returns not found", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		rpcClient := new(mocks.RPCClient)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(rpcClient)
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0xa" // 10
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head10
+		}).Once()
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0x8" // 8
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = services.RawHead{}
+		}).Once()
+
+		h, err := ht.GetChainWithBackfill(ctx, h12, 400)
+		require.NoError(t, err)
+
+		// Should contain 12, 11, 10, 9
+		assert.Equal(t, 4, int(h.ChainLength()))
+		assert.Equal(t, int64(9), h.EarliestInChain().Number)
+
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("abandons backfill and returns whatever we have if the context time budget is exceeded", func(t *testing.T) {
+		store, cleanup := cltest.NewStore(t)
+		defer cleanup()
+		for _, h := range heads {
+			require.NoError(t, store.IdempotentInsertHead(h))
+		}
+
+		rpcClient := new(mocks.RPCClient)
+		store.GethClientWrapper = cltest.NewSimpleGethWrapper(rpcClient)
+
+		mocketh := cltest.MockEthOnStore(t, store, cltest.EthMockRegisterChainID)
+		ht := services.NewHeadTracker(store, []strpkg.HeadTrackable{}, cltest.NeverSleeper{})
+
+		mocketh.RegisterSubscription("newHeads")
+		mocketh.Register("eth_chainId", store.Config.ChainID())
+
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0xa" // 10
+		}), mock.AnythingOfType("bool")).Return(nil).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = head10
+		}).Once()
+		rpcClient.On("CallContext", mock.Anything, mock.AnythingOfType("*services.RawHead"), mock.MatchedBy(func(s string) bool {
+			return s == "eth_getBlockByNumber"
+		}), mock.MatchedBy(func(b string) bool {
+			return b == "0x8" // 8
+		}), mock.AnythingOfType("bool")).Return(context.DeadlineExceeded).Run(func(args mock.Arguments) {
+			arg := args.Get(1).(*services.RawHead)
+			*arg = services.RawHead{}
+		}).Once()
+
+		h, err := ht.GetChainWithBackfill(ctx, h12, 400)
+		require.NoError(t, err)
+
+		// Should contain 12, 11, 10, 9
+		assert.Equal(t, 4, int(h.ChainLength()))
+		assert.Equal(t, int64(9), h.EarliestInChain().Number)
+
+		rpcClient.AssertExpectations(t)
+	})
 }

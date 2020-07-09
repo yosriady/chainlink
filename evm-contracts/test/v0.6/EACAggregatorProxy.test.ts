@@ -6,7 +6,7 @@ import {
 } from '@chainlink/test-helpers'
 import { assert } from 'chai'
 import { ethers } from 'ethers'
-import { SimpleAccessControlFactory } from '../../ethers/v0.6/SimpleAccessControlFactory'
+import { SimpleReadAccessControllerFactory } from '../../ethers/v0.6/SimpleReadAccessControllerFactory'
 import { MockV3AggregatorFactory } from '../../ethers/v0.6/MockV3AggregatorFactory'
 import { EACAggregatorProxyFactory } from '../../ethers/v0.6/EACAggregatorProxyFactory'
 
@@ -15,7 +15,7 @@ let defaultAccount: ethers.Wallet
 
 const provider = setup.provider()
 const linkTokenFactory = new contract.LinkTokenFactory()
-const accessControlFactory = new SimpleAccessControlFactory()
+const accessControlFactory = new SimpleReadAccessControllerFactory()
 const aggregatorFactory = new MockV3AggregatorFactory()
 const proxyFactory = new EACAggregatorProxyFactory()
 
@@ -36,7 +36,7 @@ describe('AccessControlledAggregatorProxy', () => {
   const startedAt = 677
 
   let link: contract.Instance<contract.LinkTokenFactory>
-  let controller: contract.Instance<SimpleAccessControlFactory>
+  let controller: contract.Instance<SimpleReadAccessControllerFactory>
   let aggregator: contract.Instance<MockV3AggregatorFactory>
   let aggregator2: contract.Instance<MockV3AggregatorFactory>
   let proxy: contract.Instance<EACAggregatorProxyFactory>
@@ -85,53 +85,46 @@ describe('AccessControlledAggregatorProxy', () => {
     ])
   })
 
-  describe('if the caller does not have access', () => {
-    it('latestAnswer reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).latestAnswer()
-      }, 'No access')
+  describe('callers can call view functions without explicit access', () => {
+    it('#latestAnswer', async () => {
+      await proxy.connect(personas.Carol).latestAnswer()
     })
 
-    it('latestTimestamp reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).latestTimestamp()
-      }, 'No access')
+    it('#latestTimestamp', async () => {
+      await proxy.connect(personas.Carol).latestTimestamp()
     })
 
-    it('getAnswer reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).getAnswer(1)
-      }, 'No access')
+    it('#getAnswer', async () => {
+      await proxy.connect(personas.Carol).getAnswer(1)
     })
 
-    it('getTimestamp reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).getTimestamp(1)
-      }, 'No access')
+    it('#getTimestamp', async () => {
+      await proxy.connect(personas.Carol).getTimestamp(1)
     })
 
-    it('latestRound reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).latestRound()
-      }, 'No access')
+    it('#latestRound', async () => {
+      await proxy.connect(personas.Carol).latestRound()
     })
 
-    it('getRoundData reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).getRoundData(1)
-      }, 'No access')
+    it('#getRoundData', async () => {
+      await proxy.connect(personas.Carol).getRoundData(1)
     })
 
-    it('proposedGetRoundData reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).proposedGetRoundData(1)
-      }, 'No access')
+    it('#proposedGetRoundData', async () => {
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, answer2)
+      await proxy.proposeAggregator(aggregator2.address)
+      const latestRound = await aggregator2.latestRound()
+      await proxy.connect(personas.Carol).proposedGetRoundData(latestRound)
     })
 
-    it('proposedLatestRoundData reverts', async () => {
-      await matchers.evmRevert(async () => {
-        await proxy.connect(personas.Carol).proposedLatestRoundData()
-      }, 'No access')
+    it('#proposedLatestRoundData', async () => {
+      aggregator2 = await aggregatorFactory
+        .connect(defaultAccount)
+        .deploy(decimals, answer2)
+      await proxy.proposeAggregator(aggregator2.address)
+      await proxy.connect(personas.Carol).proposedLatestRoundData()
     })
   })
 
@@ -201,7 +194,7 @@ describe('AccessControlledAggregatorProxy', () => {
   })
 
   describe('#setController', () => {
-    let newController: contract.Instance<SimpleAccessControlFactory>
+    let newController: contract.Instance<SimpleReadAccessControllerFactory>
 
     beforeEach(async () => {
       newController = await accessControlFactory

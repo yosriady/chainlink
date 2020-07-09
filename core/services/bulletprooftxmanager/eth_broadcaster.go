@@ -128,7 +128,7 @@ func (eb *ethBroadcaster) monitorEthTxs() {
 				wg.Add(1)
 				go func(k models.Key) {
 					if err := eb.ProcessUnstartedEthTxs(k); err != nil {
-						logger.Errorf("Error in ProcessUnstartedEthTxs: %s", err)
+						logger.Errorw("Error in ProcessUnstartedEthTxs", "error", err)
 					}
 					wg.Done()
 				}(key)
@@ -160,27 +160,27 @@ func (eb *ethBroadcaster) ProcessUnstartedEthTxs(key models.Key) error {
 // Then keep looking up unstarted transactions and processing them until there are none remaining.
 func (eb *ethBroadcaster) processUnstartedEthTxs(fromAddress gethCommon.Address) error {
 	if err := eb.handleAnyInProgressEthTx(fromAddress); err != nil {
-		return err
+		return errors.Wrap(err, "processUnstartedEthTxs failed")
 	}
 
 	for {
 		etx, err := nextUnstartedTransactionWithNonce(eb.store, fromAddress)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "processUnstartedEthTxs failed")
 		}
 		if etx == nil {
 			return nil
 		}
 		attempt, err := newAttempt(eb.store, *etx, eb.config.EthGasPriceDefault())
 		if err != nil {
-			return err
+			return errors.Wrap(err, "processUnstartedEthTxs failed")
 		}
 		if err := eb.saveInProgressTransaction(etx, &attempt); err != nil {
-			return err
+			return errors.Wrap(err, "processUnstartedEthTxs failed")
 		}
 
 		if err := eb.handleInProgressEthTx(*etx, attempt, true); err != nil {
-			return err
+			return errors.Wrap(err, "processUnstartedEthTxs failed")
 		}
 	}
 }
@@ -190,11 +190,11 @@ func (eb *ethBroadcaster) processUnstartedEthTxs(fromAddress gethCommon.Address)
 func (eb *ethBroadcaster) handleAnyInProgressEthTx(fromAddress gethCommon.Address) error {
 	etx, err := getInProgressEthTx(eb.store, fromAddress)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "handleAnyInProgressEthTx failed")
 	}
 	if etx != nil {
 		if err := eb.handleInProgressEthTx(*etx, etx.EthTxAttempts[0], false); err != nil {
-			return err
+			return errors.Wrap(err, "handleAnyInProgressEthTx failed")
 		}
 	}
 	return nil
@@ -341,12 +341,11 @@ func (eb *ethBroadcaster) saveInProgressTransaction(etx *models.EthTx, attempt *
 
 // Finds earliest saved transaction that has yet to be broadcast from the given address
 func findNextUnstartedTransactionFromAddress(tx *gorm.DB, etx *models.EthTx, fromAddress gethCommon.Address) error {
-	err := tx.
+	return tx.
 		Where("from_address = ? AND state = 'unstarted'", fromAddress).
-		Order("created_at ASC, id ASC").
+		Order("value ASC, created_at ASC, id ASC").
 		First(etx).
 		Error
-	return err
 }
 
 func saveUnconfirmed(store *store.Store, etx *models.EthTx, attempt models.EthTxAttempt, callbacks ...func(tx *gorm.DB) error) error {
@@ -356,11 +355,12 @@ func saveUnconfirmed(store *store.Store, etx *models.EthTx, attempt models.EthTx
 	if attempt.State != models.EthTxAttemptInProgress {
 		return errors.New("attempt must be in in_progress state")
 	}
+	logger.Debugw("EthBroadcaster: successfully broadcast transaction", "ethTxID", etx.ID, "txHash", attempt.Hash.Hex())
 	etx.State = models.EthTxUnconfirmed
 	attempt.State = models.EthTxAttemptBroadcast
 	return store.Transaction(func(tx *gorm.DB) error {
 		if err := IncrementNextNonce(tx, etx.FromAddress, *etx.Nonce); err != nil {
-			return err
+			return errors.Wrap(err, "saveUnconfirmed failed")
 		}
 		if err := tx.Save(etx).Error; err != nil {
 			return errors.Wrap(err, "saveUnconfirmed failed to save eth_tx")
@@ -370,7 +370,7 @@ func saveUnconfirmed(store *store.Store, etx *models.EthTx, attempt models.EthTx
 		}
 		for _, f := range callbacks {
 			if err := f(tx); err != nil {
-				return err
+				return errors.Wrap(err, "saveUnconfirmed failed")
 			}
 		}
 		return nil
@@ -385,11 +385,11 @@ func (eb *ethBroadcaster) tryAgainWithHigherGasPrice(sendError *sendError, etx m
 		"Consider increasing ETH_GAS_PRICE_DEFAULT", eb.config.EthGasPriceDefault(), sendError.Error(), bumpedGasPrice)
 	replacementAttempt, err := newAttempt(eb.store, etx, bumpedGasPrice)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "tryAgainWithHigherGasPrice failed")
 	}
 
 	if err := saveReplacementInProgressAttempt(eb.store, attempt, &replacementAttempt); err != nil {
-		return err
+		return errors.Wrap(err, "tryAgainWithHigherGasPrice failed")
 	}
 	return eb.handleInProgressEthTx(etx, replacementAttempt, isVirginTransaction)
 }
@@ -398,6 +398,10 @@ func saveFatallyErroredTransaction(store *store.Store, etx *models.EthTx) error 
 	if etx.State != models.EthTxInProgress {
 		return errors.Errorf("can only transition to fatal_error from in_progress, transaction is currently %s", etx.State)
 	}
+	if etx.Error == nil {
+		return errors.New("expected error field to be set")
+	}
+	logger.Errorw("EthBroadcaster: fatal error sending transaction", "ethTxID", etx.ID, "error", *etx.Error)
 	etx.Nonce = nil
 	etx.State = models.EthTxFatalError
 	return store.Transaction(func(tx *gorm.DB) error {
